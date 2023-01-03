@@ -1,6 +1,8 @@
 import Foundation
 import CBORCoding
+#if canImport(Vapor)
 import Vapor
+#endif
 
 private let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
 private let decoder = CBORDecoder()
@@ -247,6 +249,7 @@ public final class PropertyManager {
 
     // MARK: Routes
 
+#if canImport(Vapor)
     /**
      Register the routes to access the properties.
      - Parameter subPath: The server route subpath where the properties can be accessed
@@ -310,6 +313,7 @@ public final class PropertyManager {
             return .init(status: .ok)
         }
     }
+#endif
 
     // MARK: Logging
 
@@ -346,6 +350,8 @@ public final class PropertyManager {
     }
 }
 
+#if canImport(Vapor)
+
 extension ByteBuffer {
 
     func all() -> Data? {
@@ -365,3 +371,5 @@ private extension Request {
         return data
     }
 }
+
+#endif

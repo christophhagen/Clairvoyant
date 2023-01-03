@@ -19,10 +19,12 @@ let package = Package(
             name: "Clairvoyant",
             dependencies: [
                 .product(name: "CBORCoding", package: "CBORCoding"),
-                .product(name: "Vapor", package: "vapor")
             ]),
         .testTarget(
             name: "ClairvoyantTests",
-            dependencies: ["Clairvoyant"]),
+            dependencies: [
+                "Clairvoyant",
+                .product(name: "Vapor", package: "vapor"),
+            ]),
     ]
 )
