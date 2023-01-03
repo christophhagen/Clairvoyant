@@ -78,9 +78,14 @@ public final class PropertyManager {
             }
         }
         if let write = property.write {
-            details.write = { data in
+            details.write = { [weak self] data in
                 let value: T = try decoder.decode(from: data)
                 try await write(value)
+                if details.isLogged {
+                    let t = Timestamped(value: value)
+                    let data = try encoder.encode(t)
+                    self?.log(data, for: id)
+                }
             }
         }
         switch property.updates {
@@ -312,6 +317,24 @@ public final class PropertyManager {
             try await self.setValue(value, for: parameterId, accessData: accessData)
             return .init(status: .ok)
         }
+
+        app.post(.constant(subPath), "history") { [weak self] request async throws -> Response in
+            guard let self else {
+                return .init(status: .internalServerError)
+            }
+
+            guard let body = request.body.data?.all() else {
+                throw Abort(.badRequest)
+            }
+
+            let historyRequest: PropertyHistoryRequest = try decoder.decode(from: body)
+            let property = PropertyId(name: historyRequest.owner, uniqueId: historyRequest.propertyId)
+
+            let accessData = try request.token()
+
+            let data = try self.getHistory(for: property, in: historyRequest.range, accessData: accessData)
+            return .init(status: .ok, body: .init(data: data))
+        }
     }
 #endif
 
@@ -330,6 +353,7 @@ public final class PropertyManager {
             try handle.seekToEnd()
             let length = UInt32(value.count).toData()
             try handle.write(contentsOf: length + value)
+            try handle.synchronize()
         } catch {
             print("Failed to log property \(property): \(error)")
         }
@@ -347,6 +371,68 @@ public final class PropertyManager {
         let handle = try FileHandle(forUpdating: url)
         properties[property]?.fileHandle = handle
         return handle
+    }
+
+    public func deleteLogfile(for property: PropertyId) throws {
+        try properties[property]?.fileHandle?.close()
+        properties[property]?.fileHandle = nil
+        let url = logFileUrl(for: property)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    public func getHistory(for id: PropertyId, in range: ClosedRange<Date>, accessData: Data) throws -> Data {
+        guard properties[id] != nil else {
+            throw PropertyError.unknownProperty
+        }
+        guard owners[id.name] != nil else {
+            throw PropertyError.unknownProperty
+        }
+        let handle = try fileHandle(for: id)
+        try handle.seek(toOffset: 0)
+        var result = Data()
+        while true {
+            guard let byteCountData = try handle.read(upToCount: 4) else {
+                break
+            }
+            guard let byteCount = UInt32(fromData: byteCountData) else {
+                print("Not a valid byte count")
+                break
+            }
+            guard let valueData = try handle.read(upToCount: Int(byteCount)) else {
+                print("No more bytes for value (needed \(byteCount))")
+                break
+            }
+            let abstractValue: AnyTimestamped = try decoder.decode(from: valueData)
+            if range.contains(abstractValue.timestamp) {
+                result.append(byteCountData + valueData)
+            }
+        }
+        return result
+    }
+
+    public func getHistory<T>(for id: PropertyId, in range: ClosedRange<Date>, accessData: Data) throws -> [Timestamped<T>] where T: PropertyValueType {
+        let data = try getHistory(for: id, in: range, accessData: accessData)
+        var result = [Timestamped<T>]()
+        var index = data.startIndex
+        while true {
+            guard index + 4 <= data.endIndex else {
+                break
+            }
+
+            let byteCount = Int(UInt32(fromData: data[index..<index+4])!)
+            index += 4
+            guard index + byteCount <= data.endIndex else {
+                print("No more bytes for data (Needed \(byteCount), \(data.endIndex - index) remaining)")
+                break
+            }
+            let valueData = data[index..<index+byteCount]
+            index += byteCount
+            let value: Timestamped<T> = try decoder.decode(from: valueData)
+            result.append(value)
+        }
+        return result
     }
 }
 

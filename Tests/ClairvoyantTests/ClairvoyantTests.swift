@@ -78,10 +78,14 @@ final class ClairvoyantTests: XCTestCase {
         let manager = PropertyManager(logFolder: temporaryDirectory.appendingPathComponent("logs"))
         emitter.registerAll(with: manager)
 
+        let start = Date()
+
         let propertyId = PropertyId(name: emitter.name, uniqueId: 123)
         let accessData = Data()
         let decoder = CBORDecoder()
         let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
+
+        try manager.deleteLogfile(for: propertyId)
 
         do {
             let initial = try await manager.getValue(for: propertyId, accessData: accessData)
@@ -110,5 +114,8 @@ final class ClairvoyantTests: XCTestCase {
             XCTAssertEqual(updated.value, 3)
         }
 
+        let range = start...Date()
+        let history: [Timestamped<Int>] = try manager.getHistory(for: propertyId, in: range, accessData: accessData)
+        XCTAssertEqual(history.map { $0.value }, [1, 2, 3])
     }
 }
