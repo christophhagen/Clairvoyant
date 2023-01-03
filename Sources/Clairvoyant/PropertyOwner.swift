@@ -14,8 +14,4 @@ public protocol PropertyOwner {
     func hasReadPermission(for property: UInt32, accessData: Data) -> Bool
 
     func hasWritePermission(for property: UInt32, accessData: Data) -> Bool
-
-    func getPropertyList(for accessData: Data) -> [PropertyDescription]
-
-    func getHistoryOfProperty(withId uniqueId: UInt32, in range: ClosedRange<Date>) async throws -> Data
 }
