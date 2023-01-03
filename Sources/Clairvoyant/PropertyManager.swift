@@ -337,6 +337,7 @@ public final class PropertyManager {
         }
         let url = logFileUrl(for: property)
         if !FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data().write(to: url)
         }
         let handle = try FileHandle(forUpdating: url)
