@@ -19,6 +19,8 @@ extension PropertyDescription {
 
     public enum Update: Codable {
 
+        case none
+
         /// The property is continuously available or computed when the property is read
         case continuous
 

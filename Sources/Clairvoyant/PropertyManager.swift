@@ -56,7 +56,7 @@ public final class PropertyManager {
         guard property.read != nil || property.write != nil else {
             return false
         }
-        if property.allowsManualUpdate, case .continuous = property.updates {
+        if property.allowsManualUpdate && !property.isUpdating {
             return false
         }
         let id = PropertyId(name: source.name, uniqueId: property.uniqueId)
@@ -82,11 +82,13 @@ public final class PropertyManager {
             }
         }
         switch property.updates {
-        case .continuous: break
+        case .continuous, .none:
+            break
         case .interval(let interval, let closure):
             details.update = .interval(interval, makeUpdateAndLoggingClosure(closure, for: id))
         case .manual(let closure):
             details.update = .manual(makeUpdateAndLoggingClosure(closure, for: id))
+
         }
         properties[id] = details
         owners[source.name] = source

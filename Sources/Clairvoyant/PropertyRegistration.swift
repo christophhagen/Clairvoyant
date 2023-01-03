@@ -20,7 +20,7 @@ public struct PropertyRegistration<T> where T: PropertyValueType {
 
     public let write: PropertyWriteCallback<T>?
 
-    public init(uniqueId: UInt32, name: String, updates: PropertyUpdate<T>, isLogged: Bool, allowsManualUpdate: Bool, read: PropertyReadCallback<T>?, write: PropertyWriteCallback<T>?) {
+    public init(uniqueId: UInt32, name: String, updates: PropertyUpdate<T> = .none, isLogged: Bool = false, allowsManualUpdate: Bool = false, read: PropertyReadCallback<T>? = nil, write: PropertyWriteCallback<T>? = nil) {
         self.uniqueId = uniqueId
         self.name = name
         self.updates = updates
@@ -28,5 +28,9 @@ public struct PropertyRegistration<T> where T: PropertyValueType {
         self.allowsManualUpdate = allowsManualUpdate
         self.read = read
         self.write = write
+    }
+
+    var isUpdating: Bool {
+        updates.isUpdating
     }
 }
