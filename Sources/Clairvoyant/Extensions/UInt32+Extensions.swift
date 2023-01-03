@@ -11,6 +11,6 @@ extension UInt32 {
             return nil
         }
         let bytes = Array(data)
-        self = UInt32(bytes[0]) << 24 | UInt32(bytes[0]) << 16 | UInt32(bytes[0]) << 8 | UInt32(bytes[0])
+        self = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
     }
 }
