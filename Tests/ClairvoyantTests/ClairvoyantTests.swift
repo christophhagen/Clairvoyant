@@ -16,7 +16,9 @@ final class MyEmitter: PropertyOwner {
         .accessToken
     }
 
-    let hasPublicPropertyList = true
+    func hasListAccessPermission(_ accessData: Data) -> Bool {
+        true
+    }
 
     func hasReadPermission(for property: UInt32, accessData: Data) -> Bool {
         true

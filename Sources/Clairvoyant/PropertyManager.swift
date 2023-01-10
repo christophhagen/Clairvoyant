@@ -117,8 +117,21 @@ public final class PropertyManager {
         return status
     }
 
-    func getPropertyList(for owner: String) -> [PropertyDescription] {
-        properties.filter { $0.key.name == owner }.map {
+    func getOwnerList(accessData: Data) throws -> [String] {
+        guard serverOwner.hasOwnerListAccess(with: accessData) else {
+            throw PropertyError.authenticationFailed
+        }
+        return owners.map { $0.key }
+    }
+
+    func getPropertyList(for ownerName: String, accessData: Data) throws -> [PropertyDescription] {
+        guard let owner = owners[ownerName] else {
+            throw PropertyError.unknownProperty
+        }
+        guard owner.hasListAccessPermission(accessData) else {
+            throw PropertyError.authenticationFailed
+        }
+        return properties.filter { $0.key.name == ownerName }.map {
             $0.value.description(uniqueId: $0.key.uniqueId)
         }
     }
@@ -303,21 +316,30 @@ public final class PropertyManager {
             return try self.getStatusHistory(in: range, accessData: accessData)
         }
 
-        app.post(.constant(subPath), ":owner", "list") { [weak self] request async throws -> Response in
+        app.post(subPath, "owners") { [weak self] request async throws in
             guard let self else {
-                return .init(status: .internalServerError)
+                throw Abort(.internalServerError)
+            }
+
+            let accessData = try request.token()
+            return try self.getOwnerList(accessData: accessData)
+        }
+
+        app.post(subPath, ":owner", "list") { [weak self] request in
+            guard let self else {
+                throw Abort(.internalServerError)
             }
             guard let owner = request.parameters.get("owner", as: String.self) else {
                 throw Abort(.badRequest)
             }
-            let list = self.getPropertyList(for: owner)
-            let data = try encoder.encode(list)
-            return .init(status: .ok, body: .init(data: data))
+
+            let accessData = try request.token()
+            return try self.getPropertyList(for: owner, accessData: accessData)
         }
 
-        app.post(.constant(subPath), "get", ":owner", ":id") { [weak self] request async throws -> Response in
+        app.post(subPath, "get", ":owner", ":id") { [weak self] request in
             guard let self else {
-                return .init(status: .internalServerError)
+                throw Abort(.internalServerError)
             }
 
             guard let owner = request.parameters.get("owner", as: String.self),
@@ -327,13 +349,12 @@ public final class PropertyManager {
             let parameterId = PropertyId(name: owner, uniqueId: id)
 
             let accessData = try request.token()
-            let data = try await self.getValue(for: parameterId, accessData: accessData)
-            return .init(status: .ok, body: .init(data: data))
+            return try await self.getValue(for: parameterId, accessData: accessData)
         }
 
-        app.post(.constant(subPath), "set", ":owner", ":id") { [weak self] request async throws -> Response in
+        app.post(subPath, "set", ":owner", ":id") { [weak self] request -> Void in
             guard let self else {
-                return .init(status: .internalServerError)
+                throw Abort(.internalServerError)
             }
 
             guard let owner = request.parameters.get("owner", as: String.self),
@@ -348,12 +369,11 @@ public final class PropertyManager {
                 throw Abort(.badRequest)
             }
             try await self.setValue(value, for: parameterId, accessData: accessData)
-            return .init(status: .ok)
         }
 
-        app.post(.constant(subPath), "history") { [weak self] request async throws -> Response in
+        app.post(subPath, "history") { [weak self] request in
             guard let self else {
-                return .init(status: .internalServerError)
+                throw Abort(.internalServerError)
             }
 
             guard let body = request.body.data?.all() else {
@@ -364,9 +384,7 @@ public final class PropertyManager {
             let property = PropertyId(name: historyRequest.owner, uniqueId: historyRequest.propertyId)
 
             let accessData = try request.token()
-
-            let data = try self.getHistory(for: property, in: historyRequest.range, accessData: accessData)
-            return .init(status: .ok, body: .init(data: data))
+            return try self.getHistory(for: property, in: historyRequest.range, accessData: accessData)
         }
     }
 #endif
