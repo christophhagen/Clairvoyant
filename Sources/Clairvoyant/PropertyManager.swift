@@ -556,27 +556,3 @@ public final class PropertyManager {
         return result
     }
 }
-
-#if canImport(Vapor)
-
-extension ByteBuffer {
-
-    func all() -> Data? {
-        getData(at: 0, length: readableBytes)
-    }
-}
-
-private extension Request {
-
-    func token() throws -> Data {
-        guard let string = headers.first(name: "token") else {
-            return Data()
-        }
-        guard let data = Data(base64Encoded: string) else {
-            throw Abort(.badRequest)
-        }
-        return data
-    }
-}
-
-#endif
