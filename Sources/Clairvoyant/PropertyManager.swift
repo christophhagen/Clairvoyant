@@ -36,13 +36,40 @@ private func encode<T>(_ value: T) throws -> Data where T: Encodable {
  */
 public final class PropertyManager {
 
+    /// The property id for the server log file
+    public let serverLogPropertyId = PropertyId(name: "log", uniqueId: 0)
+
+    /// The property id for the server status
+    public let serverStatusPropertyId = PropertyId(name: "status", uniqueId: 1)
+
     /**
      Create a property manager to expose monitored properties and update them.
+     - Parameter logFolder: The folder where property logs are stored
+     - Parameter serverOwner: The instance controlling access to the main server properties
+     - Note: This function registers two properties for the server owner: The generic log file for internal errors (`id = 0`) and the server status (`id = 1`).
+     The server status can be updated using `update(status:)`, while the log entries can be added using `log(_:)` on the property manager.
      */
     public init(logFolder: URL, serverOwner: ServerOwner) {
         self.logFolder = logFolder
-        self.status = .init(value: .neverReported)
         self.serverOwner = serverOwner
+
+        let logProperty = PropertyRegistration(
+            uniqueId: serverLogPropertyId.uniqueId,
+            name: serverLogPropertyId.name,
+            isLogged: true,
+            read: { [weak self] in
+                self?.lastLogMessage ?? "".timestamped()
+            })
+        register(logProperty, for: serverOwner)
+
+        let statusProperty = PropertyRegistration(
+            uniqueId: serverStatusPropertyId.uniqueId,
+            name: serverStatusPropertyId.name,
+            isLogged: true,
+            read: { [weak self] in
+                self?.lastServerStatus ?? .init(value: .neverReported)
+            })
+        register(statusProperty, for: serverOwner)
     }
 
     deinit {
@@ -56,7 +83,6 @@ public final class PropertyManager {
                 print("Failed to close log file: \(error)")
             }
         }
-        closeStatusHandle()
     }
 
     private let logFolder: URL
@@ -67,11 +93,14 @@ public final class PropertyManager {
 
     private var performPeriodicPropertyUpdates = false
 
-    private var status: Timestamped<ServerStatus>
-
-    private var statusHandle: FileHandle?
-
+    /// The instance controlling access to the property owner list
     private let serverOwner: ServerOwner
+
+    /// The last logged message
+    private var lastLogMessage: Timestamped<String> = .init(value: "Log started")
+
+    /// The last server status
+    private var lastServerStatus: Timestamped<ServerStatus> = .init(value: .neverReported)
 
     // MARK: Registration
 
@@ -135,13 +164,22 @@ public final class PropertyManager {
         return true
     }
 
-    // MARK: Property access
+    // MARK: Status
 
-    func getStatus(accessData: Data) throws -> Timestamped<ServerStatus> {
-        guard serverOwner.hasStatusAccess(with: accessData) else {
-            throw PropertyError.authenticationFailed
+    /**
+     Update the server status.
+
+     The server status is logged and accessible using the property id, see  ``serverStatusPropertyId``
+     - Parameter status: The new server status
+     */
+    public func update(status: ServerStatus) {
+        let value = status.timestamped()
+        do {
+            try logChanged(property: serverStatusPropertyId, value: value)
+        } catch {
+            // Only encode and decode errors occur here
+            log("Failed to update status: \(error)")
         }
-        return status
     }
 
     // MARK: Property access
@@ -285,20 +323,23 @@ public final class PropertyManager {
         try await update()
     }
 
+    /**
+     Update the value for a property.
+
+     */
+    public func updateValue(for id: PropertyId) async throws {
+        guard let update = try get(property: id).update.updateCallback else {
+            throw PropertyError.actionNotPermitted
+        }
+        try await update()
+    }
+
     // MARK: Updates
 
     private func makeUpdateAndLoggingClosure<T>(_ update: @escaping PropertyUpdateCallback<T>, for property: PropertyId) -> AbstractPropertyUpdate where T: PropertyValueType {
         return { [weak self] in
             let value = try await update()
-            let encoded = try encoder.encode(value)
-            guard let lastValueData = self?.lastValue(for: property) else {
-                self?.log(encoded, for: property)
-                return
-            }
-            let lastValue: Timestamped<T>? = try decoder.decode(from: lastValueData)
-            if lastValue?.value != value?.value {
-                self?.log(encoded, for: property)
-            }
+            try self?.logChanged(property: property, value: value)
         }
     }
 
@@ -323,7 +364,7 @@ public final class PropertyManager {
                     continue
                 }
                 guard delay < Double(UInt64.max) else {
-                    print("Very large delay (\(delay) s), quitting updates")
+                    log("Very large delay (\(delay) s), quitting updates")
                     return
                 }
                 await Task.yield()
@@ -355,26 +396,12 @@ public final class PropertyManager {
             do {
                 try await update()
             } catch {
-                print("Failed to update property \(property.name): \(error)")
+                log("Failed to update property \(property.name): \(error)")
             }
             properties[id]?.didUpdate()
             nextUpdate = min(nextUpdate, next.advanced(by: interval))
         }
         return nextUpdate
-    }
-
-    // MARK: Status
-
-    public func update(status: ServerStatus) {
-        self.status = status.timestamped()
-        do {
-            let fileHandle = try getStatusHandle()
-            let data = try encoder.encode(self.status)
-            try append(data, withLengthInformationTo: fileHandle)
-        } catch {
-            print("Failed to log status: \(error)")
-            closeStatusHandle()
-        }
     }
 
     // MARK: Routes
@@ -385,28 +412,6 @@ public final class PropertyManager {
      - Parameter subPath: The server route subpath where the properties can be accessed
      */
     public func registerRoutes(_ app: Application, subPath: String = "properties") {
-        app.post(subPath, "status") { [weak self] request in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            let accessData = try request.token()
-            return try self.getStatus(accessData: accessData)
-        }
-
-        app.post(subPath, "status", "history") { [weak self] request in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            guard let body = request.body.data?.all() else {
-                throw Abort(.badRequest)
-            }
-            let range: ClosedRange<Date> = try decoder.decode(from: body)
-
-            let accessData = try request.token()
-            return try self.getStatusHistory(in: range, accessData: accessData)
-        }
 
         app.post(subPath, "owners") { [weak self] request async throws in
             guard let self else {
@@ -483,26 +488,30 @@ public final class PropertyManager {
 
     // MARK: Logging
 
-    private var statusLogUrl: URL {
-        logFolder.appendingPathComponent("status")
-    }
-
-    private func getStatusHandle() throws -> FileHandle {
-        if let statusHandle {
-            return statusHandle
+    public func logChanged<T>(property propertyId: PropertyId, value: Timestamped<T>?) throws where T: PropertyValueType {
+        let property = try get(property: propertyId)
+        guard property.isLogged else {
+            return
         }
-        let handle = try createFileHandle(at: statusLogUrl)
-        statusHandle = handle
-        return handle
+        let encoded = try encode(value)
+        guard let lastValueData = self.lastValue(for: propertyId) else {
+            self.log(encoded, for: propertyId)
+            return
+        }
+        let lastValue: Timestamped<T>? = try decode(from: lastValueData)
+        if lastValue?.value != value?.value {
+            self.log(encoded, for: propertyId)
+        }
     }
 
-    private func closeStatusHandle() {
+    public func log(_ message: String) {
+        let value = message.timestamped()
         do {
-            try statusHandle?.close()
+            try logChanged(property: serverLogPropertyId, value: value)
         } catch {
-            print("Failed to close status log file: \(error)")
+            print("[] \(message)")
+            print("Log failed: \(error)")
         }
-        statusHandle = nil
     }
 
     private func logFileUrl(for property: PropertyId) -> URL {
@@ -546,7 +555,7 @@ public final class PropertyManager {
         do {
             try handle.close()
         } catch {
-            print("Failed to close log file: \(error)")
+            log("Failed to close log file: \(error)")
         }
         properties[property]?.fileHandle = nil
     }
@@ -585,16 +594,6 @@ public final class PropertyManager {
         }
     }
 
-    public func getStatusHistory(in range: ClosedRange<Date>, accessData: Data) throws -> Data {
-        let handle = try getStatusHandle()
-        do {
-            return try getHistory(at: handle, in: range)
-        } catch {
-            closeStatusHandle()
-            throw error
-        }
-    }
-
     private func getHistory(at handle: FileHandle, in range: ClosedRange<Date>) throws -> Data {
         try handle.seek(toOffset: 0)
         var result = Data()
@@ -603,11 +602,11 @@ public final class PropertyManager {
                 break
             }
             guard let byteCount = UInt32(fromData: byteCountData) else {
-                print("Not a valid byte count")
+                log("Not a valid byte count")
                 break
             }
             guard let valueData = try handle.read(upToCount: Int(byteCount)) else {
-                print("No more bytes for value (needed \(byteCount))")
+                log("No more bytes for value (needed \(byteCount))")
                 break
             }
             let abstractValue: AnyTimestamped = try decode(from: valueData)

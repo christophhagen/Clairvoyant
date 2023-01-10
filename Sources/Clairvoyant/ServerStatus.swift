@@ -69,3 +69,8 @@ extension ServerStatus: CustomStringConvertible {
 }
 
 extension ServerStatus: Timestampable { }
+
+extension ServerStatus: PropertyValueType {
+
+    public static let type: PropertyType = .enumeration
+}

@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol PropertyValueType: Codable, Equatable {
+public protocol PropertyValueType: Codable, Equatable, Timestampable {
 
     static var type: PropertyType { get }
 }

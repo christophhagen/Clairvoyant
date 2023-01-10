@@ -1,8 +1,11 @@
 import Foundation
 
-public protocol ServerOwner {
+public protocol ServerOwner: PropertyOwner {
 
-    func hasOwnerListAccess(with accessData: Data) -> Bool
+}
 
-    func hasStatusAccess(with accessData: Data) -> Bool
+public extension ServerOwner {
+
+    /// The property owner name of the server
+    var name: String { "Server" }
 }
