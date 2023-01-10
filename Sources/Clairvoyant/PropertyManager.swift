@@ -17,6 +17,7 @@ public final class PropertyManager {
      */
     public init(logFolder: URL, serverOwner: ServerOwner) {
         self.logFolder = logFolder
+        self.status = .init(value: .neverReported)
         self.serverOwner = serverOwner
     }
 
@@ -40,6 +41,8 @@ public final class PropertyManager {
     private var owners: [String : PropertyOwner] = [:]
 
     private var performPeriodicPropertyUpdates = false
+
+    private var status: Timestamped<ServerStatus>
 
     private let serverOwner: ServerOwner
 
@@ -107,10 +110,11 @@ public final class PropertyManager {
 
     // MARK: Property access
 
-    func getPropertyList() -> [String : [PropertyDescription]] {
-        owners.keys.reduce(into: [:]) { list, owner in
-            list[owner] = getPropertyList(for: owner)
+    func getStatus(accessData: Data) throws -> Timestamped<ServerStatus> {
+        guard serverOwner.hasStatusAccess(with: accessData) else {
+            throw PropertyError.authenticationFailed
         }
+        return status
     }
 
     func getPropertyList(for owner: String) -> [PropertyDescription] {
@@ -255,6 +259,19 @@ public final class PropertyManager {
         return nextUpdate
     }
 
+    // MARK: Status
+
+    public func update(status: ServerStatus) {
+        self.status = status.timestamped()
+        do {
+            let fileHandle = try createFileHandle(at: statusLogUrl)
+            let data = try encoder.encode(self.status)
+            try append(data, withLengthInformationTo: fileHandle)
+        } catch {
+            print("Failed to log status: \(error)")
+        }
+    }
+
     // MARK: Routes
 
 #if canImport(Vapor)
@@ -263,14 +280,27 @@ public final class PropertyManager {
      - Parameter subPath: The server route subpath where the properties can be accessed
      */
     public func registerRoutes(_ app: Application, subPath: String = "properties") {
-        app.post(.constant(subPath), "list") { [weak self] request async throws -> Response in
+        app.post(subPath, "status") { [weak self] request in
             guard let self else {
-                return .init(status: .internalServerError)
+                throw Abort(.internalServerError)
             }
 
-            let list = self.getPropertyList()
-            let data = try encoder.encode(list)
-            return .init(status: .ok, body: .init(data: data))
+            let accessData = try request.token()
+            return try self.getStatus(accessData: accessData)
+        }
+
+        app.post(subPath, "status", "history") { [weak self] request in
+            guard let self else {
+                throw Abort(.internalServerError)
+            }
+
+            guard let body = request.body.data?.all() else {
+                throw Abort(.badRequest)
+            }
+            let range: ClosedRange<Date> = try decoder.decode(from: body)
+
+            let accessData = try request.token()
+            return try self.getStatusHistory(in: range, accessData: accessData)
         }
 
         app.post(.constant(subPath), ":owner", "list") { [weak self] request async throws -> Response in
@@ -343,6 +373,10 @@ public final class PropertyManager {
 
     // MARK: Logging
 
+    private var statusLogUrl: URL {
+        logFolder.appendingPathComponent("status")
+    }
+
     private func logFileUrl(for property: PropertyId) -> URL {
         logFolder
             .appendingPathComponent(property.name)
@@ -353,13 +387,17 @@ public final class PropertyManager {
         properties[property]?.lastValue = value
         do {
             let handle = try fileHandle(for: property)
-            try handle.seekToEnd()
-            let length = UInt32(value.count).toData()
-            try handle.write(contentsOf: length + value)
-            try handle.synchronize()
+            try append(value, withLengthInformationTo: handle)
         } catch {
             print("Failed to log property \(property): \(error)")
         }
+    }
+
+    private func append(_ value: Data, withLengthInformationTo fileHandle: FileHandle) throws {
+        let length = UInt32(value.count).toData()
+        try fileHandle.seekToEnd()
+        try fileHandle.write(contentsOf: length + value)
+        try fileHandle.synchronize()
     }
 
     private func fileHandle(for property: PropertyId) throws -> FileHandle {
@@ -367,12 +405,17 @@ public final class PropertyManager {
             return handle
         }
         let url = logFileUrl(for: property)
+        let handle = try createFileHandle(at: url)
+        properties[property]?.fileHandle = handle
+        return handle
+    }
+
+    private func createFileHandle(at url: URL) throws -> FileHandle {
         if !FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data().write(to: url)
         }
         let handle = try FileHandle(forUpdating: url)
-        properties[property]?.fileHandle = handle
         return handle
     }
 
@@ -389,10 +432,22 @@ public final class PropertyManager {
         guard properties[id] != nil else {
             throw PropertyError.unknownProperty
         }
-        guard owners[id.name] != nil else {
+        guard let owner = owners[id.name] else {
             throw PropertyError.unknownProperty
         }
+        guard owner.hasReadPermission(for: id.uniqueId, accessData: accessData) else {
+            throw PropertyError.authenticationFailed
+        }
         let handle = try fileHandle(for: id)
+        return try getHistory(at: handle, in: range)
+    }
+
+    public func getStatusHistory(in range: ClosedRange<Date>, accessData: Data) throws -> Data {
+        let handle = try createFileHandle(at: statusLogUrl)
+        return try getHistory(at: handle, in: range)
+    }
+
+    private func getHistory(at handle: FileHandle, in range: ClosedRange<Date>) throws -> Data {
         try handle.seek(toOffset: 0)
         var result = Data()
         while true {
