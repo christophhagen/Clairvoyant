@@ -1,10 +1,8 @@
 import XCTest
-import Clairvoyant
+@testable import Clairvoyant
 import CBORCoding
 
-final class MyEmitter: PropertyOwner {
-
-    let name = "MyEmitter"
+final class MyEmitter: ServerOwner {
 
     var value: Timestamped<Int>
 
@@ -62,17 +60,6 @@ final class MyEmitter: PropertyOwner {
     }
 }
 
-private final class MyServer: ServerOwner {
-
-    func hasOwnerListAccess(with accessData: Data) -> Bool {
-        true
-    }
-
-    func hasStatusAccess(with accessData: Data) -> Bool {
-        true
-    }
-}
-
 final class ClairvoyantTests: XCTestCase {
 
     private var temporaryDirectory: URL {
@@ -89,47 +76,43 @@ final class ClairvoyantTests: XCTestCase {
 
         let manager = PropertyManager(
             logFolder: temporaryDirectory.appendingPathComponent("logs"),
-            serverOwner: MyServer())
+            serverOwner: emitter)
         emitter.registerAll(with: manager)
 
         let start = Date()
 
         let propertyId = PropertyId(name: emitter.name, uniqueId: 123)
-        let accessData = Data()
-        let decoder = CBORDecoder()
-        let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
 
         try manager.deleteLogfile(for: propertyId)
 
         do {
-            let initial = try await manager.getValue(for: propertyId, accessData: accessData)
-            let decoded: Timestamped<Int> = try decoder.decode(from: initial)
-            XCTAssertEqual(decoded.value, 0)
+            let initial: Timestamped<Int> = try await manager.getValue(for: propertyId)
+            XCTAssertEqual(initial.value, 0)
         }
 
-        try await manager.updateValue(for: propertyId, accessData: accessData)
+        try await manager.updateValue(for: propertyId)
 
         do {
-            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId, accessData: accessData)
+            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId)
             XCTAssertEqual(updated.value, 1)
         }
+
+        try await manager.setValue(2, for: propertyId)
+
         do {
-            let data = try encoder.encode(2)
-            try await manager.setValue(data, for: propertyId, accessData: accessData)
-        }
-        do {
-            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId, accessData: accessData)
+            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId)
             XCTAssertEqual(updated.value, 2)
         }
 
-        try await manager.setValue(3, for: propertyId, accessData: accessData)
+        try await manager.setValue(3, for: propertyId)
+
         do {
-            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId, accessData: accessData)
+            let updated: Timestamped<Int> = try await manager.getValue(for: propertyId)
             XCTAssertEqual(updated.value, 3)
         }
 
         let range = start...Date()
-        let history: [Timestamped<Int>] = try manager.getHistory(for: propertyId, in: range, accessData: accessData)
+        let history: [Timestamped<Int>] = try manager.getHistory(for: propertyId, in: range)
         XCTAssertEqual(history.map { $0.value }, [1, 2, 3])
     }
 }
