@@ -144,17 +144,49 @@ public final class PropertyManager {
         return status
     }
 
-    func getOwnerList(accessData: Data) throws -> [String] {
-        guard serverOwner.hasOwnerListAccess(with: accessData) else {
+    // MARK: Property access
+
+    /**
+     Get the owner by name.
+     - Parameter name: The name of the owner
+     - Throws: `PropertyError.unknownOwner`
+     - Returns: The property owner
+     */
+    private func get(owner name: String) throws -> PropertyOwner {
+        try owners[name].unwrap(orThrow: PropertyError.unknownOwner)
+    }
+
+    /**
+     Get a property by id.
+     - Parameter name: The id of the property
+     - Throws: `PropertyError.unknownProperty`
+     - Returns: The property reference
+     */
+    private func get(property id: PropertyId) throws -> PropertyReference {
+        try properties[id].unwrap(orThrow: PropertyError.unknownProperty)
+    }
+
+    /**
+     Get the list of all property owners.
+     - Parameter accessData: The access data for the server.
+     - Throws: `PropertyError.authenticationFailed`
+     - Returns: The list of all property owner names
+     */
+    private func getOwnerList(accessData: Data) throws -> [String] {
+        guard serverOwner.hasListAccessPermission(accessData) else {
             throw PropertyError.authenticationFailed
         }
         return owners.map { $0.key }
     }
 
-    func getPropertyList(for ownerName: String, accessData: Data) throws -> [PropertyDescription] {
-        guard let owner = owners[ownerName] else {
-            throw PropertyError.unknownProperty
-        }
+    /**
+     Get the list of properties for an owner.
+     - Parameter accessData: The access data for the owner.
+     - Throws: `PropertyError.authenticationFailed`
+     - Returns: The list of all properties for the owner
+     */
+    private func getPropertyList(for ownerName: String, accessData: Data) throws -> [PropertyDescription] {
+        let owner = try get(owner: ownerName)
         guard owner.hasListAccessPermission(accessData) else {
             throw PropertyError.authenticationFailed
         }
@@ -163,15 +195,19 @@ public final class PropertyManager {
         }
     }
 
-    public func getValue(for id: PropertyId, accessData: Data) async throws -> Data {
-        guard let property = properties[id] else {
-            throw PropertyError.unknownProperty
-        }
-        guard let read = property.read else {
+    /**
+     Get the data for a property.
+
+     This function is used internally to expose properties over routes.
+     - Parameter accessData: The access data for the owner.
+     - Throws: `PropertyError.authenticationFailed`, `PropertyError.unknownProperty`, `PropertyError.unknownOwner`, `PropertyError.actionNotPermitted`
+     - Returns: The timestamped value of the property, encoded using the standard encoder
+     */
+    private func getValue(for id: PropertyId, accessData: Data) async throws -> Data {
+        let owner = try get(owner: id.name)
+
+        guard let read = try get(property: id).read else {
             throw PropertyError.actionNotPermitted
-        }
-        guard let owner = owners[id.name] else {
-            throw PropertyError.unknownProperty
         }
         guard owner.hasReadPermission(for: id.uniqueId, accessData: accessData) else {
             throw PropertyError.authenticationFailed
@@ -179,20 +215,35 @@ public final class PropertyManager {
         return try await read()
     }
 
-    public func getValue<T>(for id: PropertyId, accessData: Data) async throws -> Timestamped<T> where T: PropertyValueType {
-        let data = try await getValue(for: id, accessData: accessData)
+    /**
+     Access the value of a property.
+     - Parameter id: The property id
+     - Throws: `PropertyError.unknownProperty`, `PropertyError.actionNotPermitted`
+     - Returns: The current value of the property, timestamped
+     */
+    public func getValue<T>(for id: PropertyId) async throws -> Timestamped<T> where T: PropertyValueType {
+        guard let read = try get(property: id).read else {
+            throw PropertyError.actionNotPermitted
+        }
+
+        let data = try await read()
         return try decode(from: data)
     }
 
-    public func setValue(_ value: Data, for id: PropertyId, accessData: Data) async throws {
-        guard let property = properties[id] else {
-            throw PropertyError.unknownProperty
-        }
+    /**
+     Set a new value for a property.
+
+     This function is used internally to expose properties over routes.
+     - Parameter accessData: The access data for the owner.
+     - Parameter value: The data of the property, encoded using the standard encoder
+     - Throws: `PropertyError.authenticationFailed`, `PropertyError.unknownProperty`, `PropertyError.unknownOwner`, `PropertyError.actionNotPermitted`, `PropertyError.failedToDecode`
+     */
+    private func setValue(_ value: Data, for id: PropertyId, accessData: Data) async throws {
+        let owner = try get(owner: id.name)
+        let property = try get(property: id)
+
         guard let write = property.write else {
             throw PropertyError.actionNotPermitted
-        }
-        guard let owner = owners[id.name] else {
-            throw PropertyError.unknownProperty
         }
         guard owner.hasWritePermission(for: id.uniqueId, accessData: accessData) else {
             throw PropertyError.authenticationFailed
@@ -200,20 +251,33 @@ public final class PropertyManager {
         try await write(value)
     }
 
-    public func setValue<T>(_ value: T, for id: PropertyId, accessData: Data) async throws where T: PropertyValueType {
-        let data = try encoder.encode(value)
-        try await setValue(data, for: id, accessData: accessData)
-    }
+    /**
+     Set a new value for a property.
 
-    public func updateValue(for id: PropertyId, accessData: Data) async throws {
-        guard let property = properties[id] else {
-            throw PropertyError.unknownProperty
-        }
-        guard let update = property.update.updateCallback else {
+     - Parameter accessData: The access data for the owner.
+     - Parameter value: The new value for the property
+     - Throws: `PropertyError.authenticationFailed`, `PropertyError.unknownProperty`, `PropertyError.unknownOwner`, `PropertyError.actionNotPermitted`, `PropertyError.failedToEncode`
+     */
+    public func setValue<T>(_ value: T, for id: PropertyId) async throws where T: PropertyValueType {
+        guard let write = try get(property: id).write else {
             throw PropertyError.actionNotPermitted
         }
-        guard let owner = owners[id.name] else {
-            throw PropertyError.unknownProperty
+
+        let data = try encode(value)
+        try await write(data)
+    }
+
+    /**
+     Update the value for a property.
+
+     This function is internally used to expose properties over routes.
+     */
+    func updateValue(for id: PropertyId, accessData: Data) async throws {
+        let owner = try get(owner: id.name)
+        let property = try get(property: id)
+
+        guard let update = property.update.updateCallback else {
+            throw PropertyError.actionNotPermitted
         }
         guard owner.hasReadPermission(for: id.uniqueId, accessData: accessData) else {
             throw PropertyError.authenticationFailed
@@ -505,13 +569,10 @@ public final class PropertyManager {
         }
     }
 
-    public func getHistory(for id: PropertyId, in range: ClosedRange<Date>, accessData: Data) throws -> Data {
-        guard properties[id] != nil else {
-            throw PropertyError.unknownProperty
-        }
-        guard let owner = owners[id.name] else {
-            throw PropertyError.unknownProperty
-        }
+    private func getHistory(for id: PropertyId, in range: ClosedRange<Date>, accessData: Data) throws -> Data {
+        let owner = try get(owner: id.name)
+        _ = try get(property: id)
+
         guard owner.hasReadPermission(for: id.uniqueId, accessData: accessData) else {
             throw PropertyError.authenticationFailed
         }
