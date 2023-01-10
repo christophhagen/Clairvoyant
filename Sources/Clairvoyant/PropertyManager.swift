@@ -15,8 +15,9 @@ public final class PropertyManager {
     /**
      Create a property manager to expose monitored properties and update them.
      */
-    public init(logFolder: URL) {
+    public init(logFolder: URL, serverOwner: ServerOwner) {
         self.logFolder = logFolder
+        self.serverOwner = serverOwner
     }
 
     deinit {
@@ -39,6 +40,8 @@ public final class PropertyManager {
     private var owners: [String : PropertyOwner] = [:]
 
     private var performPeriodicPropertyUpdates = false
+
+    private let serverOwner: ServerOwner
 
     // MARK: Registration
 

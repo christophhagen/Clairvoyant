@@ -58,7 +58,17 @@ final class MyEmitter: PropertyOwner {
     func writeProp(_ value: Int) async throws {
         self.value = .init(value: value)
     }
+}
 
+private final class MyServer: ServerOwner {
+
+    func hasOwnerListAccess(with accessData: Data) -> Bool {
+        true
+    }
+
+    func hasStatusAccess(with accessData: Data) -> Bool {
+        true
+    }
 }
 
 final class ClairvoyantTests: XCTestCase {
@@ -75,7 +85,9 @@ final class ClairvoyantTests: XCTestCase {
     func test() async throws {
         let emitter = MyEmitter()
 
-        let manager = PropertyManager(logFolder: temporaryDirectory.appendingPathComponent("logs"))
+        let manager = PropertyManager(
+            logFolder: temporaryDirectory.appendingPathComponent("logs"),
+            serverOwner: MyServer())
         emitter.registerAll(with: manager)
 
         let start = Date()
