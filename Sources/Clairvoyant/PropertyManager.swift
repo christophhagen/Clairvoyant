@@ -32,6 +32,7 @@ public final class PropertyManager {
                 print("Failed to close log file: \(error)")
             }
         }
+        closeStatusHandle()
     }
 
     private let logFolder: URL
@@ -43,6 +44,8 @@ public final class PropertyManager {
     private var performPeriodicPropertyUpdates = false
 
     private var status: Timestamped<ServerStatus>
+
+    private var statusHandle: FileHandle?
 
     private let serverOwner: ServerOwner
 
@@ -277,11 +280,12 @@ public final class PropertyManager {
     public func update(status: ServerStatus) {
         self.status = status.timestamped()
         do {
-            let fileHandle = try createFileHandle(at: statusLogUrl)
+            let fileHandle = try getStatusHandle()
             let data = try encoder.encode(self.status)
             try append(data, withLengthInformationTo: fileHandle)
         } catch {
             print("Failed to log status: \(error)")
+            closeStatusHandle()
         }
     }
 
@@ -395,6 +399,24 @@ public final class PropertyManager {
         logFolder.appendingPathComponent("status")
     }
 
+    private func getStatusHandle() throws -> FileHandle {
+        if let statusHandle {
+            return statusHandle
+        }
+        let handle = try createFileHandle(at: statusLogUrl)
+        statusHandle = handle
+        return handle
+    }
+
+    private func closeStatusHandle() {
+        do {
+            try statusHandle?.close()
+        } catch {
+            print("Failed to close status log file: \(error)")
+        }
+        statusHandle = nil
+    }
+
     private func logFileUrl(for property: PropertyId) -> URL {
         logFolder
             .appendingPathComponent(property.name)
@@ -408,6 +430,7 @@ public final class PropertyManager {
             try append(value, withLengthInformationTo: handle)
         } catch {
             print("Failed to log property \(property): \(error)")
+            closeFileHandle(for: property)
         }
     }
 
@@ -426,6 +449,18 @@ public final class PropertyManager {
         let handle = try createFileHandle(at: url)
         properties[property]?.fileHandle = handle
         return handle
+    }
+
+    private func closeFileHandle(for property: PropertyId) {
+        guard let handle = properties[property]?.fileHandle else {
+            return
+        }
+        do {
+            try handle.close()
+        } catch {
+            print("Failed to close log file: \(error)")
+        }
+        properties[property]?.fileHandle = nil
     }
 
     private func createFileHandle(at url: URL) throws -> FileHandle {
@@ -457,12 +492,22 @@ public final class PropertyManager {
             throw PropertyError.authenticationFailed
         }
         let handle = try fileHandle(for: id)
-        return try getHistory(at: handle, in: range)
+        do {
+            return try getHistory(at: handle, in: range)
+        } catch {
+            closeFileHandle(for: id)
+            throw error
+        }
     }
 
     public func getStatusHistory(in range: ClosedRange<Date>, accessData: Data) throws -> Data {
-        let handle = try createFileHandle(at: statusLogUrl)
-        return try getHistory(at: handle, in: range)
+        let handle = try getStatusHandle()
+        do {
+            return try getHistory(at: handle, in: range)
+        } catch {
+            closeStatusHandle()
+            throw error
+        }
     }
 
     private func getHistory(at handle: FileHandle, in range: ClosedRange<Date>) throws -> Data {
