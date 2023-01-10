@@ -8,6 +8,30 @@ private let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
 private let decoder = CBORDecoder()
 
 /**
+ Decode a value using the common decoder.
+ - Throws: `PropertyError.failedToDecode`
+ */
+private func decode<T>(from data: Data) throws -> T where T: Decodable {
+    do {
+        return try decoder.decode(from: data)
+    } catch {
+        throw PropertyError.failedToDecode
+    }
+}
+
+/**
+ Encode a value using the common encoder.
+ - Throws: `PropertyError.failedToEncode`
+ */
+private func encode<T>(_ value: T) throws -> Data where T: Encodable {
+    do {
+        return try encoder.encode(value)
+    } catch {
+        throw PropertyError.failedToEncode
+    }
+}
+
+/**
  
  */
 public final class PropertyManager {
@@ -83,16 +107,16 @@ public final class PropertyManager {
         if let read = property.read {
             details.read = {
                 let value = try await read()
-                return try encoder.encode(value)
+                return try encode(value)
             }
         }
         if let write = property.write {
             details.write = { [weak self] data in
-                let value: T = try decoder.decode(from: data)
+                let value: T = try decode(from: data)
                 try await write(value)
                 if details.isLogged {
                     let t = Timestamped(value: value)
-                    let data = try encoder.encode(t)
+                    let data = try encode(t)
                     self?.log(data, for: id)
                 }
             }
@@ -157,7 +181,7 @@ public final class PropertyManager {
 
     public func getValue<T>(for id: PropertyId, accessData: Data) async throws -> Timestamped<T> where T: PropertyValueType {
         let data = try await getValue(for: id, accessData: accessData)
-        return try decoder.decode(from: data)
+        return try decode(from: data)
     }
 
     public func setValue(_ value: Data, for id: PropertyId, accessData: Data) async throws {
@@ -525,7 +549,7 @@ public final class PropertyManager {
                 print("No more bytes for value (needed \(byteCount))")
                 break
             }
-            let abstractValue: AnyTimestamped = try decoder.decode(from: valueData)
+            let abstractValue: AnyTimestamped = try decode(from: valueData)
             if range.contains(abstractValue.timestamp) {
                 result.append(byteCountData + valueData)
             }

@@ -6,4 +6,6 @@ public enum PropertyError: Error {
     case inconsistentData
     case initializationFailed
     case authenticationFailed
+    case failedToDecode
+    case failedToEncode
 }
