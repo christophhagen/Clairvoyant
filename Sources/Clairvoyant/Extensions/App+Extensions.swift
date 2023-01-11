@@ -1,6 +1,7 @@
 import Foundation
-import Vapor
 import CBORCoding
+#if canImport(Vapor)
+import Vapor
 
 private let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
 
@@ -32,3 +33,4 @@ extension Application {
     }
 }
 
+#endif
