@@ -81,7 +81,7 @@ final class ClairvoyantTests: XCTestCase {
 
         let start = Date()
 
-        let propertyId = PropertyId(name: emitter.name, uniqueId: 123)
+        let propertyId = PropertyId(owner: emitter.name, uniqueId: 123)
 
         try manager.deleteLogfile(for: propertyId)
 

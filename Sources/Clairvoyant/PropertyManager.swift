@@ -37,10 +37,10 @@ private func encode<T>(_ value: T) throws -> Data where T: Encodable {
 public final class PropertyManager {
 
     /// The property id for the server log file
-    public let serverLogPropertyId = PropertyId(name: "log", uniqueId: 0)
+    public let serverLogPropertyId: PropertyId!
 
     /// The property id for the server status
-    public let serverStatusPropertyId = PropertyId(name: "status", uniqueId: 1)
+    public let serverStatusPropertyId: PropertyId!
 
     /**
      Create a property manager to expose monitored properties and update them.
@@ -52,19 +52,21 @@ public final class PropertyManager {
     public init(logFolder: URL, serverOwner: ServerOwner) {
         self.logFolder = logFolder
         self.serverOwner = serverOwner
+        self.serverLogPropertyId = .init(owner: serverOwner.name, uniqueId: 0)
+        self.serverStatusPropertyId = .init(owner: serverOwner.name, uniqueId: 1)
 
         let logProperty = PropertyRegistration(
-            uniqueId: serverLogPropertyId.uniqueId,
-            name: serverLogPropertyId.name,
+            uniqueId: 0,
+            name: serverOwner.name,
             isLogged: true,
             read: { [weak self] in
                 self?.lastLogMessage ?? "".timestamped()
             })
-        register(logProperty, for: serverOwner)
+         register(logProperty, for: serverOwner)
 
         let statusProperty = PropertyRegistration(
-            uniqueId: serverStatusPropertyId.uniqueId,
-            name: serverStatusPropertyId.name,
+            uniqueId: 1,
+            name: serverOwner.name,
             isLogged: true,
             read: { [weak self] in
                 self?.lastServerStatus ?? .init(value: .neverReported)
@@ -120,16 +122,16 @@ public final class PropertyManager {
      - Returns: `true`, if the property was registered, `false`, if an error occured.
      */
     @discardableResult
-    public func register<T>(_ property: PropertyRegistration<T>, for source: PropertyOwner) -> Bool {
+    public func register<T>(_ property: PropertyRegistration<T>, for source: PropertyOwner) -> PropertyId? {
         guard property.read != nil || property.write != nil else {
-            return false
+            return nil
         }
         if property.allowsManualUpdate && !property.isUpdating {
-            return false
+            return nil
         }
-        let id = PropertyId(name: source.name, uniqueId: property.uniqueId)
+        let id = PropertyId(owner: source.name, uniqueId: property.uniqueId)
         guard properties[id] == nil else {
-            return false
+            return nil
         }
         var details = PropertyReference(
             name: property.name,
@@ -168,7 +170,7 @@ public final class PropertyManager {
         }
         properties[id] = details
         owners[source.name] = source
-        return true
+        return id
     }
 
     // MARK: Status
@@ -235,7 +237,7 @@ public final class PropertyManager {
         guard owner.hasListAccessPermission(accessData) else {
             throw PropertyError.authenticationFailed
         }
-        return properties.filter { $0.key.name == ownerName }.map {
+        return properties.filter { $0.key.owner == ownerName }.map {
             $0.value.description(uniqueId: $0.key.uniqueId)
         }
     }
@@ -249,7 +251,7 @@ public final class PropertyManager {
      - Returns: The timestamped value of the property, encoded using the standard encoder
      */
     private func getValue(for id: PropertyId, accessData: Data) async throws -> Data {
-        let owner = try get(owner: id.name)
+        let owner = try get(owner: id.owner)
 
         guard let read = try get(property: id).read else {
             throw PropertyError.actionNotPermitted
@@ -284,7 +286,7 @@ public final class PropertyManager {
      - Throws: `PropertyError.authenticationFailed`, `PropertyError.unknownProperty`, `PropertyError.unknownOwner`, `PropertyError.actionNotPermitted`, `PropertyError.failedToDecode`
      */
     private func setValue(_ value: Data, for id: PropertyId, accessData: Data) async throws {
-        let owner = try get(owner: id.name)
+        let owner = try get(owner: id.owner)
         let property = try get(property: id)
 
         guard let write = property.write else {
@@ -318,7 +320,7 @@ public final class PropertyManager {
      This function is internally used to expose properties over routes.
      */
     func updateValue(for id: PropertyId, accessData: Data) async throws {
-        let owner = try get(owner: id.name)
+        let owner = try get(owner: id.owner)
         let property = try get(property: id)
 
         guard let update = property.update.updateCallback else {
@@ -450,7 +452,7 @@ public final class PropertyManager {
                   let id = request.parameters.get("id", as: UInt32.self) else {
                 throw Abort(.badRequest)
             }
-            let parameterId = PropertyId(name: owner, uniqueId: id)
+            let parameterId = PropertyId(owner: owner, uniqueId: id)
 
             let accessData = try request.token()
             return try await self.getValue(for: parameterId, accessData: accessData)
@@ -465,7 +467,7 @@ public final class PropertyManager {
                   let id = request.parameters.get("id", as: UInt32.self) else {
                 throw Abort(.badRequest)
             }
-            let parameterId = PropertyId(name: owner, uniqueId: id)
+            let parameterId = PropertyId(owner: owner, uniqueId: id)
 
             let accessData = try request.token()
 
@@ -481,7 +483,7 @@ public final class PropertyManager {
             }
 
             let historyRequest: PropertyHistoryRequest = try request.decodeBody()
-            let property = PropertyId(name: historyRequest.owner, uniqueId: historyRequest.propertyId)
+            let property = PropertyId(owner: historyRequest.owner, uniqueId: historyRequest.propertyId)
 
             let accessData = try request.token()
             return try self.getHistory(for: property, in: historyRequest.range, accessData: accessData)
@@ -519,7 +521,7 @@ public final class PropertyManager {
 
     private func logFileUrl(for property: PropertyId) -> URL {
         logFolder
-            .appendingPathComponent(property.name)
+            .appendingPathComponent(property.owner)
             .appendingPathComponent(String(property.uniqueId))
     }
 
@@ -582,7 +584,7 @@ public final class PropertyManager {
     }
 
     private func getHistory(for id: PropertyId, in range: ClosedRange<Date>, accessData: Data) throws -> Data {
-        let owner = try get(owner: id.name)
+        let owner = try get(owner: id.owner)
         _ = try get(property: id)
 
         guard owner.hasReadPermission(for: id.uniqueId, accessData: accessData) else {
