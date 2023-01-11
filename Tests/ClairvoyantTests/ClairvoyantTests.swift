@@ -71,11 +71,22 @@ final class ClairvoyantTests: XCTestCase {
         }
     }
 
+    private var logFolder: URL {
+        temporaryDirectory.appendingPathComponent("logs")
+    }
+
+    override func tearDown() async throws {
+        let url = logFolder
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
     func test() async throws {
         let emitter = MyEmitter()
 
         let manager = PropertyManager(
-            logFolder: temporaryDirectory.appendingPathComponent("logs"),
+            logFolder: logFolder,
             serverOwner: emitter)
         emitter.registerAll(with: manager)
 
@@ -114,5 +125,21 @@ final class ClairvoyantTests: XCTestCase {
         let range = start...Date()
         let history: [Timestamped<Int>] = try manager.getHistory(for: propertyId, in: range)
         XCTAssertEqual(history.map { $0.value }, [1, 2, 3])
+    }
+
+    func testLastValueFromLog() async throws {
+        let emitter = MyEmitter()
+
+        let propertyId = PropertyId(owner: emitter.name, uniqueId: 123)
+
+        let manager = PropertyManager(
+            logFolder: logFolder,
+            serverOwner: emitter)
+        emitter.registerAll(with: manager)
+
+        try await manager.setValue(2, for: propertyId)
+
+        let value: Timestamped<Int>? = try manager.loadLastValueFromLog(for: propertyId)
+        XCTAssertEqual(value?.value, 2)
     }
 }

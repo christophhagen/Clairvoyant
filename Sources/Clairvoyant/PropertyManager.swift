@@ -635,6 +635,7 @@ public final class PropertyManager {
 
     func loadLastValueDataFromLog(for id: PropertyId) throws -> Data? {
         let handle = try fileHandle(for: id)
+        try handle.seek(toOffset: 0)
         var lastData: Data?
         while let valueData = try handle.getValueDataWithLengthPrepended() {
             lastData = valueData
