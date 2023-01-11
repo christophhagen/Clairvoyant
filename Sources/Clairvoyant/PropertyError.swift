@@ -9,4 +9,5 @@ public enum PropertyError: Error {
     case authenticationFailed
     case failedToDecode
     case failedToEncode
+    case logFileCorrupted
 }

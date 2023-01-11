@@ -163,6 +163,9 @@ public final class PropertyManager {
             details.update = .manual(makeUpdateAndLoggingClosure(closure, for: id))
 
         }
+        if property.isLogged, let lastValue = try? loadLastValueDataFromLog(for: id) {
+            details.lastValue = lastValue
+        }
         properties[id] = details
         owners[source.name] = source
         return true
@@ -597,19 +600,9 @@ public final class PropertyManager {
     private func getHistory(at handle: FileHandle, in range: ClosedRange<Date>) throws -> Data {
         try handle.seek(toOffset: 0)
         var result = Data()
-        while true {
-            guard let byteCountData = try handle.read(upToCount: 4) else {
-                break
-            }
-            guard let byteCount = UInt32(fromData: byteCountData) else {
-                log("Not a valid byte count")
-                break
-            }
-            guard let valueData = try handle.read(upToCount: Int(byteCount)) else {
-                log("No more bytes for value (needed \(byteCount))")
-                break
-            }
+        while let valueData = try handle.getValueDataWithLengthPrepended() {
             let abstractValue: AnyTimestamped = try decode(from: valueData)
+            let byteCountData = UInt32(valueData.count).toData()
             if range.contains(abstractValue.timestamp) {
                 result.append(byteCountData + valueData)
             }
@@ -621,23 +614,51 @@ public final class PropertyManager {
         let handle = try fileHandle(for: id)
         try handle.seek(toOffset: 0)
         var result = [Timestamped<T>]()
-        while true {
-            guard let byteCountData = try handle.read(upToCount: 4) else {
-                break
-            }
-            guard let byteCount = UInt32(fromData: byteCountData) else {
-                log("Not a valid byte count")
-                break
-            }
-            guard let valueData = try handle.read(upToCount: Int(byteCount)) else {
-                log("No more bytes for value (needed \(byteCount))")
-                break
-            }
+        while let valueData = try handle.getValueDataWithLengthPrepended() {
             let value: Timestamped<T> = try decode(from: valueData)
             if range.contains(value.timestamp) {
                 result.append(value)
             }
         }
         return result
+    }
+
+    public func loadLastValueFromLog<T>(for id: PropertyId) throws -> Timestamped<T>? where T: PropertyValueType {
+        guard let lastData = try loadLastValueDataFromLog(for: id) else {
+            return nil
+        }
+        let value: Timestamped<T> = try decode(from: lastData)
+        return value
+    }
+
+    func loadLastValueDataFromLog(for id: PropertyId) throws -> Data? {
+        let handle = try fileHandle(for: id)
+        var lastData: Data?
+        while let valueData = try handle.getValueDataWithLengthPrepended() {
+            lastData = valueData
+        }
+        return lastData
+    }
+}
+
+private extension FileHandle {
+
+    func getValueDataWithLengthPrepended() throws -> Data? {
+        guard let byteCountData = try read(upToCount: 4) else {
+            return nil
+        }
+        guard let byteCount = UInt32(fromData: byteCountData) else {
+            print("Not a valid byte count")
+            throw PropertyError.logFileCorrupted
+        }
+        guard let valueData = try read(upToCount: Int(byteCount)) else {
+            print("No more bytes for value (needed \(byteCount))")
+            throw PropertyError.logFileCorrupted
+        }
+        guard valueData.count == byteCount else {
+            print("No more bytes for value (needed \(byteCount))")
+            throw PropertyError.logFileCorrupted
+        }
+        return valueData
     }
 }
