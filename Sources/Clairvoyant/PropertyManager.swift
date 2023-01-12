@@ -160,9 +160,9 @@ public final class PropertyManager {
         case .continuous, .none:
             break
         case .interval(let interval, let closure):
-            details.update = .interval(interval, makeUpdateAndLoggingClosure(closure, for: id))
+            details.update = .interval(interval, makeUpdateClosure(closure, for: id, isLogged: property.isLogged))
         case .manual(let closure):
-            details.update = .manual(makeUpdateAndLoggingClosure(closure, for: id))
+            details.update = .manual(makeUpdateClosure(closure, for: id, isLogged: property.isLogged))
 
         }
         if property.isLogged, let lastValue = try? loadLastValueDataFromLog(for: id) {
@@ -345,7 +345,10 @@ public final class PropertyManager {
 
     // MARK: Updates
 
-    private func makeUpdateAndLoggingClosure<T>(_ update: @escaping PropertyUpdateCallback<T>, for property: PropertyId) -> AbstractPropertyUpdate where T: PropertyValueType {
+    private func makeUpdateClosure<T>(_ update: @escaping PropertyUpdateCallback<T>, for property: PropertyId, isLogged: Bool) -> AbstractPropertyUpdate where T: PropertyValueType {
+        guard isLogged else {
+            return { _ = try await update() }
+        }
         return { [weak self] in
             let value = try await update()
             try self?.logChanged(property: property, value: value)
