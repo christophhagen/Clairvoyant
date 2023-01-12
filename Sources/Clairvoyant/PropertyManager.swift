@@ -485,7 +485,7 @@ public final class PropertyManager {
 
     // MARK: Logging
 
-    public func logChanged<T>(property propertyId: PropertyId, value: Timestamped<T>?) throws where T: PropertyValueType {
+    public func logChanged<T>(property propertyId: PropertyId, value: Timestamped<T>) throws where T: PropertyValueType {
         let property = try get(property: propertyId)
         guard property.isLogged else {
             return
@@ -495,8 +495,8 @@ public final class PropertyManager {
             self.log(encoded, for: propertyId)
             return
         }
-        let lastValue: Timestamped<T>? = try decode(from: lastValueData)
-        if lastValue?.value != value?.value {
+        let lastValue: Timestamped<T> = try decode(from: lastValueData)
+        if lastValue.value != value.value {
             self.log(encoded, for: propertyId)
         }
     }

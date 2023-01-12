@@ -1,8 +1,8 @@
 import Foundation
 
-public typealias PropertyReadCallback<T> = () async throws -> Timestamped<T>?
+public typealias PropertyReadCallback<T> = () async throws -> Timestamped<T>
 public typealias PropertyWriteCallback<T> = (T) async throws -> Void
-public typealias PropertyUpdateCallback<T> = () async throws -> Timestamped<T>?
+public typealias PropertyUpdateCallback<T> = () async throws -> Timestamped<T>
 
 public struct PropertyRegistration<T> where T: PropertyValueType {
 
