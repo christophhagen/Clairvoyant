@@ -1,4 +1,5 @@
 import Foundation
+import CBORCoding
 
 public struct Timestamped<Value> {
 
@@ -12,13 +13,16 @@ public struct Timestamped<Value> {
     }
 }
 
-extension Timestamped: Codable where Value: Codable {
+extension Timestamped: Encodable where Value: Encodable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(timestamp)
         try container.encode(value)
     }
+}
+
+extension Timestamped: Decodable where Value: Decodable {
 
     public init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -49,4 +53,45 @@ extension Timestampable {
     public func timestamped() -> Timestamped<Self> {
         .init(value: self)
     }
+}
+
+public protocol AsTimestamped {
+
+    associatedtype Value
+}
+
+extension Timestamped: AsTimestamped { }
+
+extension Array where Element: AsTimestamped, Element: Decodable {
+
+    public static func decode(from data: Data, using decoder: CBORDecoder = .init()) throws -> [Element] {
+        var result = [Element]()
+        var index = data.startIndex
+        while index < data.endIndex {
+            guard index + 4 <= data.endIndex else {
+                throw PropertyError.failedToDecode
+            }
+            let byteCountData = data[index..<index+4]
+            guard let byteCountRaw = UInt32(fromData: byteCountData) else {
+                throw PropertyError.failedToDecode
+            }
+            let byteCount = Int(byteCountRaw)
+            index += 4
+
+            guard index + byteCount <= data.endIndex else {
+                throw PropertyError.failedToDecode
+            }
+            let valueData = data[index..<index+byteCount]
+            index += byteCount
+
+            do {
+                let value: Element = try decoder.decode(from: valueData)
+                result.append(value)
+            } catch {
+                throw PropertyError.failedToDecode
+            }
+        }
+        return result
+    }
+
 }
