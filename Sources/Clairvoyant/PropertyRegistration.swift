@@ -60,7 +60,6 @@ public struct PropertyRegistration<T> where T: PropertyValueType {
         } else {
             self.write = nil
         }
-        self.push = serverToPush
     }
 
     var isUpdating: Bool {

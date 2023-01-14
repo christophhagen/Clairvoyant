@@ -3,6 +3,9 @@ import CBORCoding
 #if canImport(Vapor)
 import Vapor
 #endif
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 private let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
 private let decoder = CBORDecoder()
