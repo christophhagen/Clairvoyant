@@ -193,7 +193,11 @@ public final class PropertyManager {
         let data: Data
         let response: URLResponse
         do {
+#if canImport(FoundationNetworking)
+            (data, response) = try await data(URLSession.shared, for: request)
+#else
             (data, response) = try await URLSession.shared.data(for: request)
+#endif
         } catch {
             throw PropertyError.remoteServerRequestFailed
         }
@@ -226,7 +230,11 @@ public final class PropertyManager {
 
         let response: URLResponse
         do {
+#if canImport(FoundationNetworking)
+            (_, response) = try await data(URLSession.shared, for: request)
+#else
             (_, response) = try await URLSession.shared.data(for: request)
+#endif
         } catch {
             throw PropertyError.remoteServerRequestFailed
         }
