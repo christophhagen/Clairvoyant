@@ -247,9 +247,9 @@ public final class PropertyManager {
      - Parameter status: The new server status
      */
     public func update(status: ServerStatus) {
-        let value = status.timestamped()
+        lastServerStatus = status.timestamped()
         do {
-            try logChanged(property: serverStatusPropertyId, value: value)
+            try logChanged(property: serverStatusPropertyId, value: lastServerStatus)
         } catch {
             // Only encode and decode errors occur here
             log("Failed to update status: \(error)")
