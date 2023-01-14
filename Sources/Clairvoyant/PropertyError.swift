@@ -10,4 +10,6 @@ public enum PropertyError: Error {
     case failedToDecode
     case failedToEncode
     case logFileCorrupted
+    case remotePropertyNotFound
+    case remoteServerRequestFailed
 }

@@ -173,6 +173,71 @@ public final class PropertyManager {
         return id
     }
 
+    static func collect<T>(_ property: PropertyId, from server: URL, auth: RemotePropertyAuthentication) async throws -> Timestamped<T> where T: PropertyValueType {
+        let url = server.appendingPathComponent("get/\(property.owner)/\(property.uniqueId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        switch auth {
+        case .none:
+            break
+        case .authToken(let token):
+            request.addValue(token.base64EncodedString(), forHTTPHeaderField: "token")
+        case .privateKey(_):
+            // TODO: Allow access with public key signature
+            break
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw PropertyError.remoteServerRequestFailed
+        }
+        guard let response = (response as? HTTPURLResponse) else {
+            throw PropertyError.remoteServerRequestFailed
+        }
+        if response.statusCode == 404 {
+            throw PropertyError.remotePropertyNotFound
+        }
+        guard response.statusCode == 200 else {
+            throw PropertyError.remoteServerRequestFailed
+        }
+        return try decode(from: data)
+    }
+
+    static func set<T>(_ value: T, for property: PropertyId, on server: URL, auth: RemotePropertyAuthentication) async throws where T: PropertyValueType {
+        let url = server.appendingPathComponent("set/\(property.owner)/\(property.uniqueId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try encode(value)
+        switch auth {
+        case .none:
+            break
+        case .authToken(let token):
+            request.addValue(token.base64EncodedString(), forHTTPHeaderField: "token")
+        case .privateKey(_):
+            // TODO: Allow access with public key signature
+            break
+        }
+
+        let response: URLResponse
+        do {
+            (_, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw PropertyError.remoteServerRequestFailed
+        }
+        guard let response = (response as? HTTPURLResponse) else {
+            throw PropertyError.remoteServerRequestFailed
+        }
+        if response.statusCode == 404 {
+            throw PropertyError.remotePropertyNotFound
+        }
+        if response.statusCode != 200 {
+            throw PropertyError.remoteServerRequestFailed
+        }
+    }
+
     // MARK: Status
 
     /**
