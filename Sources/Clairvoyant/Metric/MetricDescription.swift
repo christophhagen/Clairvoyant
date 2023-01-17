@@ -10,6 +10,16 @@ public struct MetricDescription {
 
     /// The data type of the values in the metric
     public let dataType: MetricType
+
+    /**
+     Create a new metric description.
+     - Parameter id: The unique if of the metric
+     - Parameter dataType: The data type of the values in the metric
+     */
+    public init(id: String, dataType: MetricType) {
+        self.id = id
+        self.dataType = dataType
+    }
 }
 
 extension MetricDescription: Encodable {
