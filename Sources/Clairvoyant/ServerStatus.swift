@@ -70,7 +70,7 @@ extension ServerStatus: CustomStringConvertible {
 
 extension ServerStatus: Timestampable { }
 
-extension ServerStatus: PropertyValueType {
-
-    public static let type: PropertyType = .enumeration
+extension ServerStatus: MetricValue {
+    
+    public static let valueType: MetricType = .enumeration
 }

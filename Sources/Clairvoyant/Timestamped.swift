@@ -69,17 +69,17 @@ extension Array where Element: AsTimestamped, Element: Decodable {
         var index = data.startIndex
         while index < data.endIndex {
             guard index + 4 <= data.endIndex else {
-                throw PropertyError.failedToDecode
+                throw MetricError.failedToDecode
             }
             let byteCountData = data[index..<index+4]
             guard let byteCountRaw = UInt32(fromData: byteCountData) else {
-                throw PropertyError.failedToDecode
+                throw MetricError.failedToDecode
             }
             let byteCount = Int(byteCountRaw)
             index += 4
 
             guard index + byteCount <= data.endIndex else {
-                throw PropertyError.failedToDecode
+                throw MetricError.failedToDecode
             }
             let valueData = data[index..<index+byteCount]
             index += byteCount
@@ -88,7 +88,7 @@ extension Array where Element: AsTimestamped, Element: Decodable {
                 let value: Element = try decoder.decode(from: valueData)
                 result.append(value)
             } catch {
-                throw PropertyError.failedToDecode
+                throw MetricError.failedToDecode
             }
         }
         return result
