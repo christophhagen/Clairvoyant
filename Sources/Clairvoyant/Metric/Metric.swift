@@ -53,7 +53,11 @@ public final class Metric<T> where T: MetricValue {
             return true
         }
         let dataPoint = Timestamped(timestamp: timestamp, value: value)
-        return observer.update(dataPoint, for: self)
+        guard observer.update(dataPoint, for: self) else {
+            return false
+        }
+        _lastValue = dataPoint
+        return true
     }
 
     public func lastValue() -> Timestamped<T>? {
