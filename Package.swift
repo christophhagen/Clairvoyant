@@ -13,13 +13,15 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/SomeRandomiOSDev/CBORCoding", from: "1.3.0"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
     ],
     targets: [
         .target(
             name: "Clairvoyant",
             dependencies: [
                 .product(name: "CBORCoding", package: "CBORCoding"),
-                .product(name: "Vapor", package: "vapor")
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "Crypto", package: "swift-crypto"),
             ]),
         .testTarget(
             name: "ClairvoyantTests",
