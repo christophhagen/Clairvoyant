@@ -31,6 +31,8 @@ public final class Metric<T> where T: MetricValue {
      */
     weak var observer: MetricObserver?
 
+    private var _lastValue: Timestamped<T>? = nil
+
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
@@ -39,6 +41,7 @@ public final class Metric<T> where T: MetricValue {
         self.id = id
         self.observer = MetricObserver.standard
         self.idHash = InternalMetricId.hash(id)
+        _lastValue = observer?.getLastValue(for: self)
     }
 
     @discardableResult
@@ -46,12 +49,15 @@ public final class Metric<T> where T: MetricValue {
         guard let observer else {
             return false
         }
+        if let lastValue = _lastValue?.value, lastValue == value {
+            return true
+        }
         let dataPoint = Timestamped(timestamp: timestamp, value: value)
         return observer.update(dataPoint, for: self)
     }
 
     public func lastValue() -> Timestamped<T>? {
-        observer?.getLastValue(for: self)
+        _lastValue ?? observer?.getLastValue(for: self)
     }
 
     public func getHistory(in range: ClosedRange<Date>) throws -> [Timestamped<T>] {
