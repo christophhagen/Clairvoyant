@@ -36,7 +36,7 @@ final class ClairvoyantTests: XCTestCase {
 
         let metric = Metric<Int>("myInt")
 
-        let observer = try MetricObserver(logFolder: logFolder, authenticator: authenticator, logMetricId: "log")
+        let observer = MetricObserver(logFolder: logFolder, authenticator: authenticator, logMetricId: "log")
         observer.observe(metric)
 
         let start = Date()

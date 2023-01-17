@@ -44,6 +44,12 @@ public final class Metric<T> where T: MetricValue {
         _lastValue = observer?.getLastValue(for: self)
     }
 
+    init(unobserved id: String) {
+        self.id = id
+        self.observer = nil
+        self.idHash = InternalMetricId.hash(id)
+    }
+
     @discardableResult
     public func update(_ value: T, timestamp: Date = Date()) -> Bool {
         guard let observer else {

@@ -31,7 +31,9 @@ public final class MetricObserver {
 
     private let fileManager: FileManager = .default
 
-    private var logMetric: Metric<String>!
+    private let logMetric: Metric<String>
+
+    private let uniqueId: Int
 
     /**
      The metrics observed by this instance.
@@ -44,14 +46,14 @@ public final class MetricObserver {
 
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
      */
-    public init(logFolder: URL, authenticator: MetricAccessAuthenticator, logMetricId: String) throws {
+    public init(logFolder: URL, authenticator: MetricAccessAuthenticator, logMetricId: String) {
+        self.uniqueId = .random()
         self.encoder = .init(dateEncodingStrategy: .secondsSince1970)
         self.decoder = .init()
         self.logFolder = logFolder
         self.authenticator = authenticator
-        self.logMetric = nil
-        self.logMetric = addMetric(id: logMetricId)
-        try fileManager.createDirectory(at: logFolder, withIntermediateDirectories: true)
+        self.logMetric = .init(unobserved: logMetricId)
+        observe(logMetric)
     }
 
     private var timestampLength: Int {
@@ -74,6 +76,18 @@ public final class MetricObserver {
         fileManager.fileExists(atPath: url.path)
     }
 
+    private func ensureExistenceOfLogFolder() -> Error? {
+        guard !exists(logFolder) else {
+            return nil
+        }
+        do {
+            try fileManager.createDirectory(at: logFolder, withIntermediateDirectories: true)
+        } catch {
+            return error
+        }
+        return nil
+    }
+
     // MARK: Adding metrics
 
     public func addMetric<T>(id: String) -> Metric<T> where T: MetricValue {
@@ -83,8 +97,19 @@ public final class MetricObserver {
     }
 
     public func observe<T>(_ metric: Metric<T>) {
+        if let oldObserver = metric.observer {
+            oldObserver.remove(metric: metric)
+        }
         metric.observer = self
         observedMetrics[metric.id] = .init(idHash: metric.idHash, dataType: T.valueType)
+    }
+
+    public func remove<T>(metric: Metric<T>) {
+        guard metric.observer == self else {
+            return
+        }
+        observedMetrics[metric.id] = nil
+        metric.observer = nil
     }
 
     // MARK: Logging
@@ -109,13 +134,34 @@ public final class MetricObserver {
     // MARK: Update metric values
 
     func update<T>(_ value: Timestamped<T>, for metric: Metric<T>) -> Bool where T: MetricValue {
+        if let error = ensureExistenceOfLogFolder() {
+            logError("Failed to create log folder: \(error)", for: metric.id)
+            return false
+        }
+
         // Encode value to data
-        guard let dataPoint = encode(value, for: metric.id) else {
+        let dataPoint: Data
+        do {
+            let data = try encoder.encode(value.value)
+            let timestampData = try encoder.encode(value.timestamp.timeIntervalSince1970)
+            dataPoint = timestampData + data
+        } catch {
+            logError("Failed to encode value \(value.value)", for: metric.id)
+            return false
+        }
+
+        if let error = ensureExistenceOfLogFolder() {
+            logError("Failed to create log folder: \(error)", for: metric.id)
             return false
         }
 
         // Save last value in separate location
-        saveLastValueData(dataPoint, forMetric: metric)
+        do {
+            let url = lastValueFileUrl(for: metric.idHash)
+            try dataPoint.write(to: url)
+        } catch {
+            logError("Failed to save last value: \(error)", for: metric.id)
+        }
 
         // Write data to log file
         guard appendToLogFile(dataPoint, metric: metric) else {
@@ -127,20 +173,8 @@ public final class MetricObserver {
         return true
     }
 
-    private func encode<T>(_ value: Timestamped<T>, for metric: MetricId) -> TimestampedValueData? where T: Encodable {
-        let data: Data
-        do {
-            data = try encoder.encode(value.value)
-        } catch {
-            logError("Failed to encode value \(value.value)", for: metric)
-            return nil
-        }
-
-        let timestampData = try! encoder.encode(value.timestamp.timeIntervalSince1970)
-        return timestampData + data
-    }
-
     private func appendToLogFile(_ dataPoint: TimestampedValueData, metric: AbstractMetric) -> Bool {
+        // Existence of log folder is ensured at this point
         let url = logFileUrl(for: metric.idHash)
         guard dataPoint.count <= UInt16.max else {
             logError("Data point too large to store (\(dataPoint.count) bytes)", for: metric.id)
@@ -178,18 +212,6 @@ public final class MetricObserver {
         }
 
         return true
-    }
-
-    @discardableResult
-    private func saveLastValueData(_ data: TimestampedValueData, forMetric metric: AbstractMetric) -> Bool {
-        let url = lastValueFileUrl(for: metric.idHash)
-        do {
-            try data.write(to: url)
-            return true
-        } catch {
-            logError("Failed to save last value: \(error)", for: metric.id)
-            return false
-        }
     }
 
     // MARK: Get values
@@ -424,5 +446,12 @@ public final class MetricObserver {
             try self.authenticate(request)
             return try self.getHistoryFromLog(forMetricId: historyRequest.id, in: historyRequest.range)
         }
+    }
+}
+
+extension MetricObserver: Equatable {
+
+    public static func == (lhs: MetricObserver, rhs: MetricObserver) -> Bool {
+        lhs.uniqueId == rhs.uniqueId
     }
 }
