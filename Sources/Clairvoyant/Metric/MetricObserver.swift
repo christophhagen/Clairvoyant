@@ -434,7 +434,10 @@ public final class MetricObserver {
             }
 
             try self.authenticate(request)
-            return self.getLastValueData(forMetricId: metricId)
+            guard let data = self.getLastValueData(forMetricId: metricId) else {
+                throw Abort(.notModified)
+            }
+            return data
         }
 
         app.post(subPath, "history") { [weak self] request in
