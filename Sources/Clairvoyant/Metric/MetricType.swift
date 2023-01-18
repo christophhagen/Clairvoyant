@@ -8,6 +8,7 @@ public enum MetricType {
     case data
     case enumeration
     case customType(named: String)
+    case serverStatus
 
     var stringDescription: String {
         switch self {
@@ -25,6 +26,8 @@ public enum MetricType {
             return "Enum"
         case .customType(let name):
             return name
+        case .serverStatus:
+            return "Status"
         }
     }
 
@@ -36,6 +39,7 @@ public enum MetricType {
         case "String": self = .string
         case "Data": self = .data
         case "Enum": self = .enumeration
+        case "Status": self = .serverStatus
         default:
             self = .customType(named: stringDescription)
         }
