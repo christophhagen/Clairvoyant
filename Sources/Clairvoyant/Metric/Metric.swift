@@ -39,9 +39,11 @@ public final class Metric<T> where T: MetricValue {
      */
     public init(_ id: String) {
         self.id = id
-        self.observer = MetricObserver.standard
         self.idHash = InternalMetricId.hash(id)
+        self.observer = MetricObserver.standard
+        observer?.observe(self)
         _lastValue = observer?.getLastValue(for: self)
+
     }
 
     init(unobserved id: String) {
