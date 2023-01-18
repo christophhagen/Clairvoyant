@@ -12,27 +12,32 @@ public final class MetricObserver {
     /// The length of the binary data of a timestamp encoded in CBOR
     fileprivate static let encodedTimestampLength = 9
 
+    /**
+     The default observer, to which created metrics are added.
+
+     Set this observer to automatically observe all metrics created using `Metric(id:)`.
+     */
     public static var standard: MetricObserver?
 
-    /**
-     The directory where the log files and other internal data is to be stored.
-     */
+    /// The directory where the log files and other internal data is to be stored.
     public let logFolder: URL
 
-    /**
-     The authentication manager for access to metric information
-     */
+    /// The authentication manager for access to metric information
     public let authenticator: MetricAccessAuthenticator
 
     /// The encoder used to convert data points to binary data for logging
     private let encoder: CBOREncoder
 
+    /// The decoder used to decode log entries when providing history data
     private let decoder: CBORDecoder
 
+    /// The internal file manager used to access files
     private let fileManager: FileManager = .default
 
+    /// The internal metric used for logging
     private let logMetric: Metric<String>
 
+    /// The unique random id assigned to each observer to distinguish them
     private let uniqueId: Int
 
     /**
@@ -43,8 +48,21 @@ public final class MetricObserver {
     private var observedMetrics: [MetricId : MetricReference] = [:]
 
     /**
+     The remote observers of metrics logged with this instance.
+
+     All updates to metrics are pushed to each remote observer.
+     */
+    private var remoteObserver: [RemoteMetricObserver] = []
+
+    /**
+     Create a new observer.
+
+     Each observer creates a metric with the id `logMetricId` to log internal errors.
+     It is also possible to write to this metric using ``log(_:)``.
 
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
+     - Parameter authenticator: The handler of authentication to access metric data
+     - Parameter logMetricId: The id of the metric for internal log data
      */
     public init(logFolder: URL, authenticator: MetricAccessAuthenticator, logMetricId: String) {
         self.uniqueId = .random()
@@ -90,20 +108,46 @@ public final class MetricObserver {
 
     // MARK: Adding metrics
 
+    /**
+     Create a metric and add it to the observer.
+     - Parameter id: The id of the metric.
+     - Returns: The created metric.
+     */
     public func addMetric<T>(id: String) -> Metric<T> where T: MetricValue {
         let metric = Metric<T>(id)
         observe(metric)
         return metric
     }
 
-    public func observe<T>(_ metric: Metric<T>) {
+    /**
+     Observe a metric.
+
+     Calling this function with a metric will cause all updates to the metric to be forwarded to this observer,
+     which will log it and provide it over the web interface.
+     - Parameter metric: The metric to observe.
+     - Returns: `true`, if the metric was added to the observer, `false` if a metric with the same `id` already exists.
+     - Note: If the metric was previously observed by another observer, then it will be removed from the old observer.
+     */
+    @discardableResult
+    public func observe<T>(_ metric: Metric<T>) -> Bool {
+        guard observedMetrics[metric.id] == nil else {
+            return false
+        }
         if let oldObserver = metric.observer {
             oldObserver.remove(metric: metric)
         }
         metric.observer = self
         observedMetrics[metric.id] = .init(idHash: metric.idHash, dataType: T.valueType)
+        return true
     }
 
+    /**
+     Stop observing a metric.
+
+     Calling this function with a metric will prevent the metric from being logged by this observer.
+     - Parameter metric: The metric to remove.
+     - Note: If the metric was not previously observed by this observer, then it will not be changed, and may still be assigned to a different observer.
+     */
     public func remove<T>(metric: Metric<T>) {
         guard metric.observer == self else {
             return
@@ -114,6 +158,11 @@ public final class MetricObserver {
 
     // MARK: Logging
 
+    /**
+     Log a message to the internal log metric.
+     - Parameter message: The log entry to add.
+     - Returns: `true` if the message was added to the log, `false` if the message could not be saved.
+     */
     @discardableResult
     public func log(_ message: String) -> Bool {
         print(message)
@@ -398,7 +447,7 @@ public final class MetricObserver {
 
     // MARK: Routes
 
-    public func getListOfRecordedMetrics() -> [MetricDescription] {
+    func getListOfRecordedMetrics() -> [MetricDescription] {
         observedMetrics.map { .init(id: $0.key, dataType: $0.value.dataType) }
     }
 

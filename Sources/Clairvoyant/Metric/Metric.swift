@@ -52,6 +52,14 @@ public final class Metric<T> where T: MetricValue {
         self.idHash = InternalMetricId.hash(id)
     }
 
+    /**
+     Update the value of the metric.
+
+     This function will create a new timestamped value and forward it for logging to the observer.
+     - Parameter value: The new value to set.
+     - Parameter timestamp: The timestamp of the value (defaults to the current time)
+     - Returns: `true` if the value was stored, `false` if either no observer is registered, or the observer failed to store the value.
+     */
     @discardableResult
     public func update(_ value: T, timestamp: Date = Date()) -> Bool {
         guard let observer else {
