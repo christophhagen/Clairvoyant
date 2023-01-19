@@ -5,7 +5,6 @@ import Vapor
 private typealias TimestampedValueData = Data
 
 typealias MetricIdHash = String
-typealias MetricId = String
 
 public final class MetricObserver {
 
