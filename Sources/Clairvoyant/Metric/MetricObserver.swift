@@ -154,7 +154,7 @@ public final class MetricObserver {
             oldObserver.remove(metric)
         }
         metric.observer = self
-        observedMetrics[metric.id] = .init(idHash: metric.idHash, dataType: T.valueType)
+        observedMetrics[metric.id] = metric
         return true
     }
 
@@ -203,6 +203,13 @@ public final class MetricObserver {
 
     // MARK: Update metric values
 
+    func getMetric(with id: MetricId) throws -> AbstractMetric {
+        guard let metric = observedMetrics[id] else {
+            throw MetricError.unknownMetric
+        }
+        return metric
+    }
+
     func update<T>(_ value: Timestamped<T>, for metric: Metric<T>) -> Bool where T: MetricValue {
         if let error = ensureExistenceOfLogFolder() {
             logError("Failed to create log folder: \(error)", for: metric.id)
@@ -210,7 +217,7 @@ public final class MetricObserver {
         }
 
         // Encode value to data
-        let dataPoint: Data
+        let dataPoint: TimestampedValueData
         do {
             let data = try encoder.encode(value.value)
             let timestampData = try encoder.encode(value.timestamp.timeIntervalSince1970)
@@ -219,7 +226,10 @@ public final class MetricObserver {
             logError("Failed to encode value \(value.value)", for: metric.id)
             return false
         }
+        return update(dataPoint, for: metric)
+    }
 
+    private func update(_ dataPoint: TimestampedValueData, for metric: AbstractMetric) -> Bool {
         if let error = ensureExistenceOfLogFolder() {
             logError("Failed to create log folder: \(error)", for: metric.id)
             return false
@@ -308,11 +318,6 @@ public final class MetricObserver {
             try? fileManager.removeItem(at: lastValueFileUrl(for: metric.idHash))
             return nil
         }
-    }
-
-    func getLastValueData(forMetricId metricId: MetricIdHash) -> Data? {
-        let metric = InternalMetricId(id: metricId)
-        return getLastValueData(for: metric)
     }
 
     private func getLastValueData(for metric: AbstractMetric) -> Data? {
@@ -536,25 +541,33 @@ public final class MetricObserver {
         observedMetrics.map { .init(id: $0.key, dataType: $0.value.dataType) }
     }
 
-    private func authenticate(_ request: Request) throws {
+    private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
+        guard let metricId = request.parameters.get("id", as: String.self) else {
+            throw Abort(.badRequest)
+        }
         let accessData = try request.token()
-        guard authenticator.metricAccess(isAllowedForToken: accessData) else {
+        let metric = try getMetric(with: metricId)
+        guard authenticator.metricAccess(to: metricId, isAllowedForToken: accessData) else {
             throw MetricError.accessDenied
         }
+        return metric
     }
 
     /**
      Register the routes to access the properties.
      - Parameter subPath: The server route subpath where the properties can be accessed
      */
-    public func registerRoutes(_ app: Application, subPath: String = "properties") {
+    public func registerRoutes(_ app: Application, subPath: String = "metrics") {
 
         app.post(subPath, "list") { [weak self] request async throws in
             guard let self else {
                 throw Abort(.internalServerError)
             }
 
-            try self.authenticate(request)
+            let accessData = try request.token()
+            guard self.authenticator.metricListAccess(isAllowedForToken: accessData) else {
+                throw MetricError.accessDenied
+            }
             return self.getListOfRecordedMetrics()
         }
 
@@ -563,25 +576,47 @@ public final class MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            guard let metricId = request.parameters.get("id", as: String.self) else {
-                throw Abort(.badRequest)
-            }
+            let metric = try self.getAccessibleMetric(request)
 
-            try self.authenticate(request)
-            guard let data = self.getLastValueData(forMetricId: metricId) else {
+            guard let data = self.getLastValueData(for: metric) else {
                 throw Abort(.notModified)
             }
             return data
         }
 
-        app.post(subPath, "history") { [weak self] request in
+        app.post(subPath, "history", ":id") { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
 
-            let historyRequest: MetricHistoryRequest = try request.decodeBody()
-            try self.authenticate(request)
-            return try self.getHistoryFromLog(forMetricId: historyRequest.id, in: historyRequest.range)
+            let metric = try self.getAccessibleMetric(request)
+            let range = try request.decodeBody(as: ClosedRange<Date>.self)
+            return try self.getHistoryFromLog(forMetric: metric, in: range)
+        }
+
+        app.post(subPath, "push", ":id") { [weak self] request -> Void in
+            guard let self else {
+                throw Abort(.internalServerError)
+            }
+
+            let metric = try self.getAccessibleMetric(request)
+            guard metric.isRemote else {
+                throw Abort(.expectationFailed)
+            }
+
+            guard let valueData = request.body.data?.all() else {
+                throw Abort(.badRequest)
+            }
+
+            guard metric.verifyEncoding(of: valueData, decoder: self.decoder) else {
+                // Invalid data will ruin decoding of log files
+                throw Abort(.notAcceptable)
+            }
+            
+            // Save value for metric
+            guard self.update(valueData, for: metric) else {
+                throw Abort(.internalServerError)
+            }
         }
     }
 }
