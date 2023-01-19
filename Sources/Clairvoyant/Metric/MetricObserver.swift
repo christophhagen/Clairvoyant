@@ -51,7 +51,7 @@ public final class MetricObserver {
 
      All updates to metrics are pushed to each remote observer.
      */
-    private var remoteObserver: [RemoteMetricObserver] = []
+    private var remoteObservers: [MetricId : Set<RemoteMetricObserver>] = [:]
 
     /**
      Create a new observer.
@@ -239,7 +239,7 @@ public final class MetricObserver {
             return false
         }
 
-        // TODO: Push new value to remote server?
+        pushValueToRemoteObservers(dataPoint, for: metric)
         return true
     }
 
@@ -480,6 +480,53 @@ public final class MetricObserver {
         } catch {
             logError("Error decoding value from log file: \(error)", for: metric)
             throw MetricError.logFileCorrupted
+        }
+    }
+
+    // MARK: Remote observers
+
+    func push<T>(_ metric: AnyMetric<T>, to remote: RemoteMetricObserver) {
+        if remoteObservers[metric.id] == nil {
+            remoteObservers[metric.id] = [remote]
+        } else {
+            remoteObservers[metric.id]!.insert(remote)
+        }
+    }
+
+    private func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) {
+        guard let observers = remoteObservers[metric.id] else {
+            return
+        }
+
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for observer in observers {
+                    group.addTask {
+                        await self.push(_data: data, for: metric, toRemoteObserver: observer)
+                    }
+                }
+            }
+        }
+    }
+
+    private func push(_data: TimestampedValueData, for metric: AbstractMetric, toRemoteObserver remoteObserver: RemoteMetricObserver) async {
+
+        let remoteUrl = remoteObserver.remoteUrl
+        do {
+            let url = remoteUrl.appendingPathComponent("push/\(metric.id)")
+            var request = URLRequest(url: url)
+            request.setValue(remoteObserver.authenticationToken.base64EncodedString(), forHTTPHeaderField: "token")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let response = response as? HTTPURLResponse else {
+                logError("Invalid response pushing value to \(remoteUrl.path): \(response)", for: metric.id)
+                return
+            }
+            guard response.statusCode == 200 else {
+                logError("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)", for: metric.id)
+                return
+            }
+        } catch {
+            logError("Failed to push value to \(remoteUrl.path): \(error)", for: metric.id)
         }
     }
 
