@@ -1,6 +1,6 @@
 import Foundation
 
-protocol AbstractMetric {
+protocol AbstractMetric: AnyObject {
 
     /**
      The unique id of the metric.
@@ -17,4 +17,12 @@ protocol AbstractMetric {
      Hashing is performed to prevent special characters from creating issues with file paths.
      */
     var idHash: MetricIdHash { get }
+
+    var dataType: MetricType { get }
+
+    var isRemote: Bool { get }
+
+    var observer: MetricObserver? { get set }
+
+    func verifyEncoding(of data: Data, decoder: BinaryDecoder) -> Bool
 }

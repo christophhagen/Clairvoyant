@@ -44,7 +44,7 @@ public final class MetricObserver {
 
      The key is the metric `name`
      */
-    private var observedMetrics: [MetricId : MetricReference] = [:]
+    private var observedMetrics: [MetricId : AbstractMetric] = [:]
 
     /**
      The remote observers of metrics logged with this instance.
