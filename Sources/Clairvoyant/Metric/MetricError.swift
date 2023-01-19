@@ -21,4 +21,14 @@ public enum MetricError: UInt8, Error {
      A metric value could not be decoded from binary data
      */
     case failedToDecode = 4
+
+    /**
+     The requested metric was not found
+     */
+    case unknownMetric = 5
+
+    /**
+     The log file on the server could not be opened.
+     */
+    case failedToOpenLogFile = 6
 }
