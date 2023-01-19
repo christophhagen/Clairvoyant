@@ -8,50 +8,27 @@ import Foundation
  The generic type can be any type that conforms to `MetricValue`,
  meaning it can be encoded/decoded and provides a description of its type.
  */
-public final class Metric<T> where T: MetricValue {
-
-    /**
-     The unique id of the metric.
-
-     The id should be globally unique, so that there are no conflicts when metrics from multiple systems are collected
-     */
-    public let id: String
-
-    /**
-     The name of the file where the metric is logged.
-
-     This property is the hex representation of the first 16 bytes of the SHA256 hash of the metric id, and is computed once on initialization.
-     It is only available internally, since it is not required by the public interface.
-     Hashing is performed to prevent special characters from creating issues with file paths.
-     */
-    let idHash: MetricIdHash
-
-    /**
-     A reference to the collector of the metric for logging and processing.
-     */
-    weak var observer: MetricObserver?
-
-    private var _lastValue: Timestamped<T>? = nil
+public final class Metric<T>: AnyMetric<T> where T: MetricValue {
 
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
      */
     public init(_ id: String) {
-        self.id = id
-        self.idHash = InternalMetricId.hash(id)
-        self.observer = MetricObserver.standard
-        observer?.observe(self)
+        super.init(id: id, observer: .standard)
         _lastValue = observer?.getLastValue(for: self)
-
     }
 
     init(unobserved id: String) {
-        self.id = id
-        self.observer = nil
-        self.idHash = InternalMetricId.hash(id)
+        super.init(id: id, observer: nil)
     }
 
+    /// The last value of the metric
+    private var _lastValue: Timestamped<T>? = nil
+
+    public override func lastValue() -> Timestamped<T>? {
+        _lastValue ?? observer?.getLastValue(for: self)
+    }
     /**
      Update the value of the metric.
 
@@ -75,20 +52,4 @@ public final class Metric<T> where T: MetricValue {
         _lastValue = dataPoint
         return true
     }
-
-    public func lastValue() -> Timestamped<T>? {
-        _lastValue ?? observer?.getLastValue(for: self)
-    }
-
-    public func getHistory(in range: ClosedRange<Date>) throws -> [Timestamped<T>] {
-        try observer?.getHistoryFromLog(for: self, in: range) ?? []
-    }
-
-    public func getFullHistoryFromLogFile() throws -> [Timestamped<T>] {
-        try observer?.getFullHistoryFromLog(for: self) ?? []
-    }
-}
-
-extension Metric: AbstractMetric {
-
 }

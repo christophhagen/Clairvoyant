@@ -129,11 +129,29 @@ public final class MetricObserver {
      */
     @discardableResult
     public func observe<T>(_ metric: Metric<T>) -> Bool {
+        observe(metric: metric)
+    }
+
+    /**
+     Observe a metric published by a remote instance.
+
+     Observing a remote metric merely states an intent to accept updates from another instance.
+     The remote instance is responsible for pushing updates to the local observer.
+     - Parameter metric: The metric to observe.
+     - Returns: `true`, if the metric was added to the observer, `false` if a metric with the same `id` already exists.
+     - Note: If the metric was previously observed by another observer, then it will be removed from the old observer.
+     */
+    @discardableResult
+    public func observe<T>(_ metric: RemoteMetric<T>) -> Bool {
+        observe(metric: metric)
+    }
+
+    func observe(metric: AbstractMetric) -> Bool {
         guard observedMetrics[metric.id] == nil else {
             return false
         }
         if let oldObserver = metric.observer {
-            oldObserver.remove(metric: metric)
+            oldObserver.remove(metric)
         }
         metric.observer = self
         observedMetrics[metric.id] = .init(idHash: metric.idHash, dataType: T.valueType)
@@ -147,7 +165,11 @@ public final class MetricObserver {
      - Parameter metric: The metric to remove.
      - Note: If the metric was not previously observed by this observer, then it will not be changed, and may still be assigned to a different observer.
      */
-    public func remove<T>(metric: Metric<T>) {
+    public func remove<T>(metric: AnyMetric<T>) {
+        remove(metric)
+    }
+
+    func remove(_ metric: AbstractMetric) {
         guard metric.observer == self else {
             return
         }
