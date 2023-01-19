@@ -308,11 +308,6 @@ public final class MetricObserver {
         }
     }
 
-    func getHistoryFromLog(forMetricId metricId: MetricId, in range: ClosedRange<Date>) throws -> Data {
-        let metric = InternalMetricId(id: metricId)
-        return try getHistoryFromLog(forMetric: metric, in: range)
-    }
-
     func getHistoryFromLog(forMetric metric: AbstractMetric, in range: ClosedRange<Date>) throws -> Data {
         let url = logFileUrl(for: metric.idHash)
         guard exists(url) else {
@@ -373,31 +368,53 @@ public final class MetricObserver {
     }
 
     func getHistoryFromLog<T>(for metric: AbstractMetric, in range: ClosedRange<Date>) throws -> [Timestamped<T>] where T: MetricValue {
-        try getFullHistoryFromLog(for: metric)
-            .filter { range.contains($0.timestamp) }
-    }
-
-    func getFullHistoryFromLog<T>(for metric: AbstractMetric) throws -> [Timestamped<T>] where T: MetricValue {
-        let url = logFileUrl(for: metric.idHash)
-        guard exists(url) else {
+        guard let fileHandle = try logFileHandle(for: metric) else {
             return []
         }
-        let handle: FileHandle
-        do {
-            handle = try FileHandle(forReadingFrom: url)
-        } catch {
-            logError("Failed to read log file: \(error)", for: metric.id)
-            return []
-        }
+        defer { try? fileHandle.close() }
 
+        // TODO: Skip failing elements in log?
         var result = [Timestamped<T>]()
-        while let value: Timestamped<T> = try getNextValue(from: handle, for: metric.id, using: decoder) {
+        while let value: Timestamped<T> = try getNextValue(from: fileHandle, for: metric.id) {
+            guard value.timestamp >= range.lowerBound else {
+                continue
+            }
+            guard value.timestamp <= range.upperBound else {
+                break
+            }
             result.append(value)
         }
         return result
     }
 
-    private func getNextValueData(from handle: FileHandle, for metric: MetricId, using decoder: CBORDecoder) throws -> (timestamp: Date, data: Data)? {
+    func getFullHistoryFromLog<T>(for metric: AbstractMetric) throws -> [Timestamped<T>] where T: MetricValue {
+        guard let fileHandle = try logFileHandle(for: metric) else {
+            return []
+        }
+        defer { try? fileHandle.close() }
+
+        // TODO: Option to skip failing elements in log?
+        var result = [Timestamped<T>]()
+        while let value: Timestamped<T> = try getNextValue(from: fileHandle, for: metric.id) {
+            result.append(value)
+        }
+        return result
+    }
+
+    private func logFileHandle(for metric: AbstractMetric) throws -> FileHandle? {
+        let url = logFileUrl(for: metric.idHash)
+        guard exists(url) else {
+            return nil
+        }
+        do {
+            return try FileHandle(forReadingFrom: url)
+        } catch {
+            logError("Failed to read log file: \(error)", for: metric.id)
+            throw MetricError.failedToOpenLogFile
+        }
+    }
+
+    private func getNextValueData(from handle: FileHandle, for metric: MetricId) throws -> (timestamp: Date, data: Data)? {
         guard let byteCountData = try handle.read(upToCount: byteCountLength) else {
             return nil
         }
@@ -431,8 +448,8 @@ public final class MetricObserver {
         return (timestamp, valueData)
     }
 
-    private func getNextValue<T>(from handle: FileHandle, for metric: MetricId, using decoder: CBORDecoder) throws -> Timestamped<T>? where T: Decodable {
-        guard let (timestamp, valueData) = try getNextValueData(from: handle, for: metric, using: decoder) else {
+    private func getNextValue<T>(from handle: FileHandle, for metric: MetricId) throws -> Timestamped<T>? where T: Decodable {
+        guard let (timestamp, valueData) = try getNextValueData(from: handle, for: metric) else {
             return nil
         }
         do {
