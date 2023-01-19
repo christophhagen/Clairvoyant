@@ -1,10 +1,14 @@
 import XCTest
-@testable import Clairvoyant
+import Clairvoyant
 import CBORCoding
 
 final class MyAuthenticator: MetricAccessAuthenticator {
+    
+    func metricListAccess(isAllowedForToken accessToken: Data) -> Bool {
+        true
+    }
 
-    func metricAccess(isAllowedForToken accessToken: Data) -> Bool {
+    func metricAccess(to metric: Clairvoyant.MetricId, isAllowedForToken accessToken: Data) -> Bool {
         true
     }
 }
