@@ -278,6 +278,9 @@ public final class MetricObserver {
             logError("Failed to open log file: \(error)", for: metric.id)
             return false
         }
+        defer {
+            try? handle.close()
+        }
         do {
             try handle.seekToEnd()
         } catch {

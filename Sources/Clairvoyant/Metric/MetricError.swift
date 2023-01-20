@@ -52,6 +52,8 @@ public enum MetricError: UInt8, Error {
 
     case noValueAvailable = 11
 
+    case typeMismatch = 12
+
 }
 
 extension MetricError {
@@ -69,6 +71,7 @@ extension MetricError {
         case .badGateway: return .badGateway // 502
         case .internalError: return .internalServerError // 500
         case .noValueAvailable: return .gone // 410
+        case .typeMismatch: return .preconditionRequired // 428
         }
     }
 
@@ -85,6 +88,7 @@ extension MetricError {
         case 502: self = .badGateway
         case 500: self = .internalError
         case 410: self = .noValueAvailable
+        case 428: self = .typeMismatch
         default:
             return nil
         }

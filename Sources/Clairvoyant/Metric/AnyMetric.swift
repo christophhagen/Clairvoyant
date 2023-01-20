@@ -91,6 +91,10 @@ public class AnyMetric<T> where T: MetricValue {
         observer.push(self, to: remoteObserver)
         return true
     }
+
+    public var description: MetricDescription {
+        .init(id: id, dataType: dataType)
+    }
 }
 
 extension AnyMetric: AbstractMetric {

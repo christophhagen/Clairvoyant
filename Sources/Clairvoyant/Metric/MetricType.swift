@@ -45,3 +45,7 @@ public enum MetricType {
         }
     }
 }
+
+extension MetricType: Equatable {
+    
+}
