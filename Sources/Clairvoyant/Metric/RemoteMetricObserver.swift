@@ -1,7 +1,5 @@
 import Foundation
 
-public typealias AccessToken = Data
-
 public struct RemoteMetricObserver: Equatable, Hashable {
 
     /**

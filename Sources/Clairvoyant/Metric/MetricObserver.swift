@@ -22,7 +22,7 @@ public final class MetricObserver {
     public let logFolder: URL
 
     /// The authentication manager for access to metric information
-    public let authenticator: MetricAccessAuthenticator
+    public let accessManager: MetricRequestAccessManager
 
     /// The encoder used to convert data points to binary data for logging
     private let encoder: CBOREncoder
@@ -60,15 +60,15 @@ public final class MetricObserver {
      It is also possible to write to this metric using ``log(_:)``.
 
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
-     - Parameter authenticator: The handler of authentication to access metric data
+     - Parameter accessManager: The handler of authentication to access metric data
      - Parameter logMetricId: The id of the metric for internal log data
      */
-    public init(logFolder: URL, authenticator: MetricAccessAuthenticator, logMetricId: String) {
+    public init(logFolder: URL, accessManager: MetricRequestAccessManager, logMetricId: String) {
         self.uniqueId = .random()
         self.encoder = .init(dateEncodingStrategy: .secondsSince1970)
         self.decoder = .init()
         self.logFolder = logFolder
-        self.authenticator = authenticator
+        self.accessManager = accessManager
         self.logMetric = .init(unobserved: logMetricId)
         observe(logMetric)
     }
@@ -545,11 +545,8 @@ public final class MetricObserver {
         guard let metricId = request.parameters.get("id", as: String.self) else {
             throw Abort(.badRequest)
         }
-        let accessData = try request.token()
         let metric = try getMetric(with: metricId)
-        guard authenticator.metricAccess(to: metricId, isAllowedForToken: accessData) else {
-            throw MetricError.accessDenied
-        }
+        try accessManager.metricAccess(to: metricId, isAllowedForRequest: request)
         return metric
     }
 
@@ -564,10 +561,7 @@ public final class MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let accessData = try request.token()
-            guard self.authenticator.metricListAccess(isAllowedForToken: accessData) else {
-                throw MetricError.accessDenied
-            }
+            try self.accessManager.metricListAccess(isAllowedForRequest: request)
             return self.getListOfRecordedMetrics()
         }
 
