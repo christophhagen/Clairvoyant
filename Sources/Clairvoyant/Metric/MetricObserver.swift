@@ -573,7 +573,7 @@ public final class MetricObserver {
             let metric = try self.getAccessibleMetric(request)
 
             guard let data = self.getLastValueData(for: metric) else {
-                throw Abort(.notModified)
+                throw MetricError.noValueAvailable
             }
             return data
         }
