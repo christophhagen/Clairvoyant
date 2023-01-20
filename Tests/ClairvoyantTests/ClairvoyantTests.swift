@@ -1,5 +1,5 @@
 import XCTest
-import Clairvoyant
+@testable import Clairvoyant
 import CBORCoding
 
 final class MyAuthenticator: MetricAccessManager {
@@ -79,5 +79,31 @@ final class ClairvoyantTests: XCTestCase {
         let range = start...Date()
         let history: [Timestamped<Int>] = try metric.getHistory(in: range)
         XCTAssertEqual(history.map { $0.value }, [1, 2, 3])
+    }
+
+    func testClientHistoryDecoding() async throws {
+        let observer = MetricObserver(logFolder: logFolder, accessManager: MyAuthenticator(), logMetricId: "test.log")
+        let metric = Metric<Int>("test.int")
+        XCTAssertTrue(observer.observe(metric))
+
+        let start = Date()
+        let input = [0,1,2]
+        input.forEach {
+            XCTAssertTrue(metric.update($0))
+        }
+
+        let end = Date()
+        let range = start...end
+
+
+        let data = try observer.getHistoryFromLog(forMetric: metric, in: range)
+
+        let client = MetricConsumer(url: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))
+        let values: [Int] = try client.decode(logData: data).map { $0.value }
+        XCTAssertEqual(values, input)
+
+        let generic = client.metric(from: metric.description)
+        let genericValues = try generic.decode(data, type: Int.self).map { $0.description }
+        XCTAssertEqual(genericValues, input.map { "\($0)"})
     }
 }
