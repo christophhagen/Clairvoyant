@@ -15,8 +15,9 @@ public final class RemoteMetric<T>: AnyMetric<T> where T: MetricValue {
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
+     - Parameter dataType: The raw type of the values contained in the metric
      */
-    public init(_ id: String) {
+    public init(_ id: String, containing dataType: T.Type = T.self) {
         super.init(id: id, observer: .standard)
     }
 }
