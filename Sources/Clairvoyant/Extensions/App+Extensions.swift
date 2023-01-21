@@ -3,21 +3,11 @@ import CBORCoding
 #if canImport(Vapor)
 import Vapor
 
-private let encoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970)
-
 extension Application {
 
     @discardableResult
     func post(_ subPath: String, _ path: PathComponent..., use closure: @escaping (Request) async throws -> Data) -> Route {
         wrappingPost(subPath, path, use: closure)
-    }
-
-    @discardableResult
-    func post<T>(_ subPath: String, _ path: PathComponent..., use closure: @escaping (Request) async throws -> T) -> Route where T: Encodable {
-        wrappingPost(subPath, path) { request in
-            let value = try await closure(request)
-            return try encoder.encode(value)
-        }
     }
 
     @discardableResult

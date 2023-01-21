@@ -8,9 +8,6 @@ typealias MetricIdHash = String
 
 public final class MetricObserver {
 
-    /// The length of the binary data of a timestamp encoded in CBOR
-    fileprivate static let encodedTimestampLength = 9
-
     /**
      The default observer, to which created metrics are added.
 
@@ -25,10 +22,10 @@ public final class MetricObserver {
     public let accessManager: MetricRequestAccessManager
 
     /// The encoder used to convert data points to binary data for logging
-    private let encoder: CBOREncoder
+    private let encoder: BinaryEncoder
 
     /// The decoder used to decode log entries when providing history data
-    private let decoder: CBORDecoder
+    private let decoder: BinaryDecoder
 
     /// The internal file manager used to access files
     private let fileManager: FileManager = .default
@@ -63,18 +60,20 @@ public final class MetricObserver {
      - Parameter accessManager: The handler of authentication to access metric data
      - Parameter logMetricId: The id of the metric for internal log data
      */
-    public init(logFolder: URL, accessManager: MetricRequestAccessManager, logMetricId: String) {
+    public init(
+        logFolder: URL,
+        accessManager: MetricRequestAccessManager,
+        logMetricId: String,
+        encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
+        decoder: BinaryDecoder = CBORDecoder()) {
+
         self.uniqueId = .random()
-        self.encoder = .init(dateEncodingStrategy: .secondsSince1970)
-        self.decoder = .init()
+        self.encoder = encoder
+        self.decoder = decoder
         self.logFolder = logFolder
         self.accessManager = accessManager
         self.logMetric = .init(unobserved: logMetricId)
         observe(logMetric)
-    }
-
-    private var timestampLength: Int {
-        MetricObserver.encodedTimestampLength
     }
 
     private let byteCountLength = 2
@@ -306,15 +305,15 @@ public final class MetricObserver {
 
         let timestamp: TimeInterval
         do {
-            let timestampData = data.prefix(timestampLength)
-            timestamp = try decoder.decode(from: timestampData)
+            let timestampData = data.prefix(decoder.encodedTimestampLength)
+            timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
         } catch {
             logError("Failed to decode timestamp of last value: \(error)", for: metric.id)
             return nil
         }
 
         do {
-            let value: T = try decoder.decode(from: data.advanced(by: timestampLength))
+            let value = try decoder.decode(T.self, from: data.advanced(by: decoder.encodedTimestampLength))
             return .init(timestamp: .init(timeIntervalSince1970: timestamp), value: value)
         } catch {
             logError("Failed to decode last value: \(error)", for: metric.id)
@@ -371,14 +370,14 @@ public final class MetricObserver {
                 logError("Insufficient bytes for timestamped value: Needed \(byteCountLength + Int(byteCount)), has \(data.endIndex - startIndexOfTimestamp)", for: metric.id)
                 throw MetricError.logFileCorrupted
             }
-            guard byteCount >= timestampLength else {
+            guard byteCount >= decoder.encodedTimestampLength else {
                 logError("Log element with \(byteCount) bytes is too small to contain a timestamp", for: metric.id)
                 throw MetricError.logFileCorrupted
             }
             let timestamp: TimeInterval
             do {
-                let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+timestampLength]
-                timestamp = try decoder.decode(from: timestampData)
+                let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+decoder.encodedTimestampLength]
+                timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
             } catch {
                 logError("Failed to decode timestamp from log file: \(error)", for: metric.id)
                 throw MetricError.logFileCorrupted
@@ -452,7 +451,7 @@ public final class MetricObserver {
             logError("Error reading log file: Not a valid byte count", for: metric)
             throw MetricError.logFileCorrupted
         }
-        guard byteCount >= timestampLength else {
+        guard byteCount >= decoder.encodedTimestampLength else {
             logError("Error reading log file: Too few bytes (\(byteCount)) for timestamp", for: metric)
             throw MetricError.logFileCorrupted
         }
@@ -467,14 +466,14 @@ public final class MetricObserver {
         }
         let timestamp: Date
         do {
-            let timestampData = timestampedValueData[0..<timestampLength]
-            let timestampValue: TimeInterval = try decoder.decode(from: timestampData)
+            let timestampData = timestampedValueData[0..<decoder.encodedTimestampLength]
+            let timestampValue = try decoder.decode(TimeInterval.self, from: timestampData)
             timestamp = .init(timeIntervalSince1970: timestampValue)
         } catch {
             logError("Invalid timestamp in log file: \(error)", for: metric)
             throw MetricError.logFileCorrupted
         }
-        let valueData = timestampedValueData[timestampLength...]
+        let valueData = timestampedValueData[decoder.encodedTimestampLength...]
         return (timestamp, valueData)
     }
 
@@ -483,7 +482,7 @@ public final class MetricObserver {
             return nil
         }
         do {
-            let value: T = try decoder.decode(from: valueData)
+            let value = try decoder.decode(T.self, from: valueData)
             return .init(timestamp: timestamp, value: value)
         } catch {
             logError("Error decoding value from log file: \(error)", for: metric)
@@ -565,7 +564,8 @@ public final class MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            return self.getListOfRecordedMetrics()
+            let list = self.getListOfRecordedMetrics()
+            return try self.encoder.encode(list)
         }
 
         app.post(subPath, "last", ":id") { [weak self] request in

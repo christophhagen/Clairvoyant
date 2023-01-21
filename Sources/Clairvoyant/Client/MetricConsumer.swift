@@ -9,16 +9,22 @@ public final class MetricConsumer {
 
     public let session: URLSession
 
-    let decoder: CBORDecoder
+    let decoder: BinaryDecoder
 
-    let encoder: CBOREncoder
+    let encoder: BinaryEncoder
 
-    public init(url: URL, accessProvider: MetricRequestAccessProvider, session: URLSession = .shared) {
+    public init(
+        url: URL,
+        accessProvider: MetricRequestAccessProvider,
+        session: URLSession = .shared,
+        encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
+        decoder: BinaryDecoder = CBORDecoder()) {
+
         self.serverUrl = url
         self.accessProvider = accessProvider
         self.session = session
-        self.decoder = .init()
-        self.encoder = .init(dateEncodingStrategy: .secondsSince1970)
+        self.decoder = decoder
+        self.encoder = encoder
     }
 
     public func list() async throws -> [MetricDescription] {
@@ -100,13 +106,10 @@ public final class MetricConsumer {
         }
     }
 
-    /// The length of the binary data of a timestamp encoded in CBOR
-    private let encodedTimestampLength = 9
-
     func decode<T>(logData data: Data) throws -> [Timestamped<T>] where T: MetricValue {
         try decode(logData: data).map {
             do {
-                let value: T = try decoder.decode(from: $0.data)
+                let value = try decoder.decode(T.self, from: $0.data)
                 return .init(timestamp: $0.timestamp, value: value)
             } catch {
                 throw MetricError.failedToDecode
@@ -131,19 +134,19 @@ public final class MetricConsumer {
                 throw MetricError.failedToDecode
             }
 
-            guard byteCount >= encodedTimestampLength else {
+            guard byteCount >= decoder.encodedTimestampLength else {
                 throw MetricError.failedToDecode
             }
             let timestamp: Date
             do {
-                let timestampData = data[index..<index+encodedTimestampLength]
-                let timestampInterval: TimeInterval = try decoder.decode(from: timestampData)
+                let timestampData = data[index..<index+decoder.encodedTimestampLength]
+                let timestampInterval = try decoder.decode(TimeInterval.self, from: timestampData)
                 timestamp = .init(timeIntervalSince1970: timestampInterval)
             } catch {
                 throw MetricError.logFileCorrupted
             }
 
-            let valueData = data[index+encodedTimestampLength..<index+byteCount]
+            let valueData = data[index+decoder.encodedTimestampLength..<index+byteCount]
             index += byteCount
             result.append((timestamp, valueData))
         }
