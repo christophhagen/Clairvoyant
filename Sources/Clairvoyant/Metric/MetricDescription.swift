@@ -11,33 +11,36 @@ public struct MetricDescription {
     /// The data type of the values in the metric
     public let dataType: MetricType
 
+    /// A name to display for the metric
+    public let name: String?
+
+    /// A description of the metric content
+    public let description: String?
+
     /**
      Create a new metric description.
      - Parameter id: The unique if of the metric
      - Parameter dataType: The data type of the values in the metric
+     - Parameter name: A descriptive name of the metric
+     - Parameter description: A textual description of the metric
      */
-    public init(id: String, dataType: MetricType) {
+    public init(id: String, dataType: MetricType, name: String? = nil, description: String? = nil) {
         self.id = id
         self.dataType = dataType
+        self.name = name
+        self.description = description
     }
 }
 
-extension MetricDescription: Encodable {
+extension MetricDescription: Codable {
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(id)
-        try container.encode(dataType.stringDescription)
+    enum CodingKeys: Int, CodingKey {
+        case id = 1
+        case dataType = 2
+        case name = 3
+        case description = 4
     }
-}
 
-extension MetricDescription: Decodable {
-
-    public init(from decoder: Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        self.id = try container.decode(String.self)
-        self.dataType = .init(stringDescription: try container.decode(String.self))
-    }
 }
 
 extension MetricDescription: Equatable {

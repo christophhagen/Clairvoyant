@@ -49,3 +49,16 @@ public enum MetricType {
 extension MetricType: Equatable {
     
 }
+
+extension MetricType: Codable {
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(stringDescription)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(stringDescription: try container.decode(String.self))
+    }
+}

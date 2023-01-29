@@ -8,12 +8,7 @@ import Foundation
  */
 public class AnyMetric<T> where T: MetricValue {
 
-    /**
-     The unique id of the metric.
-
-     The id should be globally unique, so that there are no conflicts when metrics from multiple systems are collected
-     */
-    public let id: String
+    public let description: MetricDescription
 
     /**
      The name of the file where the metric is logged.
@@ -37,9 +32,11 @@ public class AnyMetric<T> where T: MetricValue {
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
+     - Parameter name: A descriptive name of the metric
+     - Parameter description: A textual description of the metric
      */
-    init(id: String, observer: MetricObserver?) {
-        self.id = id
+    init(id: String, observer: MetricObserver?, name: String?, description: String?) {
+        self.description = .init(id: id, dataType: T.valueType, name: name, description: description)
         self.idHash = id.hashed()
         self.observer = nil
         _ = observer?.observe(metric: self)
@@ -90,10 +87,6 @@ public class AnyMetric<T> where T: MetricValue {
         }
         observer.push(self, to: remoteObserver)
         return true
-    }
-
-    public var description: MetricDescription {
-        .init(id: id, dataType: dataType)
     }
 }
 

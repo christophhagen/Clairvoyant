@@ -3,11 +3,9 @@ import Foundation
 protocol AbstractMetric: AnyObject {
 
     /**
-     The unique id of the metric.
-
-     The id should be globally unique, so that there are no conflicts when metrics from multiple systems are collected
+     The description of the metric.
      */
-    var id: MetricId { get }
+    var description: MetricDescription { get }
 
     /**
      The name of the file where the metric is logged.
@@ -25,4 +23,16 @@ protocol AbstractMetric: AnyObject {
     var observer: MetricObserver? { get set }
 
     func verifyEncoding(of data: Data, decoder: BinaryDecoder) -> Bool
+}
+
+extension AbstractMetric {
+
+    /**
+     The unique id of the metric.
+
+     The id should be globally unique, so that there are no conflicts when metrics from multiple systems are collected
+     */
+    var id: MetricId {
+        description.id
+    }
 }

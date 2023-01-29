@@ -64,6 +64,8 @@ public final class MetricObserver {
         logFolder: URL,
         accessManager: MetricRequestAccessManager,
         logMetricId: String,
+        logMetricName: String? = nil,
+        logMetricDescription: String? = nil,
         encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
         decoder: BinaryDecoder = CBORDecoder()) {
 
@@ -72,7 +74,7 @@ public final class MetricObserver {
         self.decoder = decoder
         self.logFolder = logFolder
         self.accessManager = accessManager
-        self.logMetric = .init(unobserved: logMetricId)
+        self.logMetric = .init(unobserved: logMetricId, name: logMetricName, description: logMetricDescription)
         observe(logMetric)
     }
 
@@ -540,7 +542,7 @@ public final class MetricObserver {
     // MARK: Routes
 
     func getListOfRecordedMetrics() -> [MetricDescription] {
-        observedMetrics.map { .init(id: $0.key, dataType: $0.value.dataType) }
+        observedMetrics.values.map { $0.description }
     }
 
     private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {

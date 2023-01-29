@@ -85,8 +85,10 @@ public final class MetricConsumer {
                 throw metricError
             }
             throw MetricError.requestFailed
-        } catch {
+        } catch let error as MetricError {
             throw error
+        } catch {
+            throw MetricError.requestFailed
         }
     }
 

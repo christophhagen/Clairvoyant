@@ -14,14 +14,16 @@ public final class Metric<T>: AnyMetric<T> where T: MetricValue {
      Create a new metric.
      - Parameter id: The unique id of the metric.
      - Parameter dataType: The raw type of the values contained in the metric
+     - Parameter name: A descriptive name of the metric
+     - Parameter description: A textual description of the metric
      */
-    public init(_ id: String, containing dataType: T.Type = T.self) {
-        super.init(id: id, observer: .standard)
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil) {
+        super.init(id: id, observer: .standard, name: name, description: description)
         _lastValue = observer?.getLastValue(for: self)
     }
 
-    init(unobserved id: String) {
-        super.init(id: id, observer: nil)
+    init(unobserved id: String, name: String?, description: String?) {
+        super.init(id: id, observer: nil, name: name, description: description)
     }
 
     /// The last value of the metric
