@@ -5,8 +5,6 @@ import Vapor
 import FoundationNetworking
 #endif
 
-private typealias TimestampedValueData = Data
-
 typealias MetricIdHash = String
 
 public final class MetricObserver {
@@ -220,17 +218,14 @@ public final class MetricObserver {
             return false
         }
 
-        // Encode value to data
-        let dataPoint: TimestampedValueData
         do {
-            let data = try encoder.encode(value.value)
-            let timestampData = try encoder.encode(value.timestamp.timeIntervalSince1970)
-            dataPoint = timestampData + data
+            let dataPoint = try value.encode(using: encoder)
+            return update(dataPoint, for: metric)
         } catch {
             logError("Failed to encode value \(value.value)", for: metric.id)
             return false
         }
-        return update(dataPoint, for: metric)
+
     }
 
     private func update(_ dataPoint: TimestampedValueData, for metric: AbstractMetric) -> Bool {
@@ -308,18 +303,8 @@ public final class MetricObserver {
             return nil
         }
 
-        let timestamp: TimeInterval
         do {
-            let timestampData = data.prefix(decoder.encodedTimestampLength)
-            timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
-        } catch {
-            logError("Failed to decode timestamp of last value: \(error)", for: metric.id)
-            return nil
-        }
-
-        do {
-            let value = try decoder.decode(T.self, from: data.advanced(by: decoder.encodedTimestampLength))
-            return .init(timestamp: .init(timeIntervalSince1970: timestamp), value: value)
+            return try .decode(from: data, using: decoder)
         } catch {
             logError("Failed to decode last value: \(error)", for: metric.id)
             try? fileManager.removeItem(at: lastValueFileUrl(for: metric.idHash))

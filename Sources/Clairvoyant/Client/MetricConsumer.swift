@@ -55,7 +55,11 @@ public final class MetricConsumer {
         guard let data = try await lastValueData(for: metric) else {
             return nil
         }
-        return try decode(Timestamped<T>.self, from: data)
+        do {
+            return try Timestamped<T>.decode(from: data, using: decoder)
+        } catch {
+            throw MetricError.failedToDecode
+        }
     }
 
     func historyData(for metric: MetricId, in range: ClosedRange<Date>) async throws -> Data {
