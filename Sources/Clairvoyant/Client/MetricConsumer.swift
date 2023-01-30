@@ -1,5 +1,8 @@
 import Foundation
 import CBORCoding
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public final class MetricConsumer {
 

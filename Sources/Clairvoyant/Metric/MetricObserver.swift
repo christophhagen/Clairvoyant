@@ -1,6 +1,9 @@
 import Foundation
 import CBORCoding
 import Vapor
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 private typealias TimestampedValueData = Data
 
