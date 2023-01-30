@@ -545,6 +545,12 @@ public final class MetricObserver {
         observedMetrics.values.map { $0.description }
     }
 
+    private func getLastValuesOfAllMetrics() -> [String : Data] {
+        observedMetrics.reduce(into: [:]) { dict, item in
+            dict[item.key] = getLastValueData(for: item.value)
+        }
+    }
+
     private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
         guard let metricId = request.parameters.get("id", as: String.self) else {
             throw Abort(.badRequest)
@@ -552,6 +558,15 @@ public final class MetricObserver {
         let metric = try getMetric(with: metricId)
         try accessManager.metricAccess(to: metricId, isAllowedForRequest: request)
         return metric
+    }
+
+    private func encode<T>(_ result: T) throws -> Data where T: Encodable {
+        do {
+            return try encoder.encode(result)
+        } catch {
+            log("Failed to encode response: \(error)")
+            throw MetricError.failedToEncode
+        }
     }
 
     /**
@@ -567,7 +582,17 @@ public final class MetricObserver {
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
             let list = self.getListOfRecordedMetrics()
-            return try self.encoder.encode(list)
+            return try self.encode(list)
+        }
+
+        app.post(subPath, "last", "all") { [weak self] request in
+            guard let self else {
+                throw Abort(.internalServerError)
+            }
+
+            try self.accessManager.metricListAccess(isAllowedForRequest: request)
+            let result = self.getLastValuesOfAllMetrics()
+            return try self.encode(result)
         }
 
         app.post(subPath, "last", ":id") { [weak self] request in
