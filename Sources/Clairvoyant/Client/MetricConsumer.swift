@@ -77,7 +77,7 @@ public final class MetricConsumer {
         }
         accessProvider.addAccessDataToMetricRequest(&request)
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await urlSessionData(session, for: request)
             guard let response = response as? HTTPURLResponse else {
                 throw MetricError.requestFailed
             }

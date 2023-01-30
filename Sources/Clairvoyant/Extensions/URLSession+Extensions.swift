@@ -22,4 +22,8 @@ func urlSessionData(_ session: URLSession, for request: URLRequest) async throws
         return result
     }
 }
+#else
+func urlSessionData(_ session: URLSession, for request: URLRequest) async throws -> (Data, URLResponse) {
+    try await session.data(for: request)
+}
 #endif
