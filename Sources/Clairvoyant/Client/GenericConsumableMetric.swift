@@ -24,6 +24,16 @@ public final class GenericConsumableMetric {
         self.dataType = description.dataType
     }
 
+    public func lastValueData() async throws -> (data: Data, timestamp: Date)? {
+        guard let data = try await consumer.lastValueData(for: id) else {
+            return nil
+        }
+        guard let (date, remaining) = decodeTimestamp(from: data) else {
+            return nil
+        }
+        return (remaining, date)
+    }
+
     public func lastValue() async throws -> (description: String, timestamp: Date)? {
         guard let data = try await consumer.lastValueData(for: id) else {
             return nil
@@ -92,23 +102,29 @@ public final class GenericConsumableMetric {
         }
     }
 
-    private func decode<T>(_ type: T.Type, from data: Data) -> (description: String, timestamp: Date) where T: Codable {
-        let timestamp: TimeInterval
+    private func decodeTimestamp(from data: Data) -> (timestamp: Date, remaining: Data)? {
         do {
             let timestampData = data.prefix(timestampLength)
-            timestamp = try decoder.decode(from: timestampData)
+            let timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
+            return (Date(timeIntervalSince1970: timestamp), data.advanced(by: timestampLength))
+
         } catch {
             print("Failed to decode timestamp of last value: \(error)")
+            return nil
+        }
+    }
+
+    private func decode<T>(_ type: T.Type, from data: Data) -> (description: String, timestamp: Date) where T: Codable {
+        guard let (date, remaining) = decodeTimestamp(from: data) else {
             return ("Invalid timestamp", Date())
         }
 
         do {
-            let value: T = try decoder.decode(from: data.advanced(by: timestampLength))
-            let date = Date(timeIntervalSince1970: timestamp)
+            let value: T = try decoder.decode(from: remaining)
             return ("\(value)", date)
         } catch {
             print("Failed to decode last value: \(error)")
-            return ("Decoding error", Date())
+            return ("Decoding error", date)
         }
     }
 }
