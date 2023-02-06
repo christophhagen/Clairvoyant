@@ -49,14 +49,14 @@ public final class GenericConsumableMetric {
         return describe(data, type: dataType)
     }
 
-    public func lastValue<T>(as: T.Type = T.self) async throws -> Timestamped<T>? where T: MetricValue {
+    public func lastValue<T>(as type: T.Type = T.self) async throws -> Timestamped<T>? where T: MetricValue {
         guard T.valueType == dataType else {
             throw MetricError.typeMismatch
         }
         return try await consumer.lastValue(for: id)
     }
 
-    public func history<T>(in range: ClosedRange<Date>) async throws -> [Timestamped<T>] where T: MetricValue {
+    public func history<T>(in range: ClosedRange<Date>, as type: T.Type = T.self) async throws -> [Timestamped<T>] where T: MetricValue {
         try await consumer.history(for: id, in: range)
     }
 
