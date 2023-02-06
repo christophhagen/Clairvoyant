@@ -4,11 +4,15 @@ public final class ConsumableMetric<T> where T: MetricValue {
 
     let consumer: MetricConsumer
 
-    public let id: MetricId
+    public let description: MetricDescription
 
-    init(consumer: MetricConsumer, id: MetricId) {
+    public var id: MetricId {
+        description.id
+    }
+
+    init(consumer: MetricConsumer, id: MetricId, name: String? = nil, description: String? = nil) {
         self.consumer = consumer
-        self.id = id
+        self.description = .init(id: id, dataType: T.valueType, name: name, description: description)
     }
 
     public func lastValue() async throws -> Timestamped<T>? {

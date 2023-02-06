@@ -35,8 +35,8 @@ public final class MetricConsumer {
         return try decode(from: data)
     }
 
-    public func metric<T>(id: MetricId) -> ConsumableMetric<T> where T: MetricValue {
-        .init(consumer: self, id: id)
+    public func metric<T>(id: MetricId, name: String? = nil, description: String? = nil) -> ConsumableMetric<T> where T: MetricValue {
+        .init(consumer: self, id: id, name: name, description: description)
     }
 
     public func metric(from description: MetricDescription) -> GenericConsumableMetric {

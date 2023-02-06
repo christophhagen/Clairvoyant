@@ -5,23 +5,31 @@ public final class GenericConsumableMetric {
 
     let consumer: MetricConsumer
 
-    public let id: MetricId
+    public let description: MetricDescription
 
-    public let dataType: MetricType
+    public var id: MetricId {
+        description.id
+    }
+
+    public var dataType: MetricType {
+        description.dataType
+    }
+
+    public var name: String? {
+        description.name
+    }
 
     private let timestampLength = 9
 
     private let decoder = CBORDecoder()
 
-    init(consumer: MetricConsumer, id: MetricId, dataType: MetricType) {
+    init(consumer: MetricConsumer, id: MetricId, dataType: MetricType, name: String? = nil, description: String? = nil) {
         self.consumer = consumer
-        self.id = id
-        self.dataType = dataType
+        self.description = .init(id: id, dataType: dataType, name: name, description: description)
     }
     init(consumer: MetricConsumer, description: MetricDescription) {
         self.consumer = consumer
-        self.id = description.id
-        self.dataType = description.dataType
+        self.description = description
     }
 
     public func lastValueData() async throws -> (data: Data, timestamp: Date)? {
