@@ -56,6 +56,10 @@ public final class GenericConsumableMetric {
         return try await consumer.lastValue(for: id)
     }
 
+    public func history<T>(in range: ClosedRange<Date>) async throws -> [Timestamped<T>] where T: MetricValue {
+        try await consumer.history(for: id, in: range)
+    }
+
     public func history(in range: ClosedRange<Date>) async throws -> [(description: String, timestamp: Date)] {
         let data = try await consumer.historyData(for: id, in: range)
         switch dataType {
