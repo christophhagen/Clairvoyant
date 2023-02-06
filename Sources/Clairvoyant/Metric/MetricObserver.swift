@@ -5,9 +5,9 @@ import Vapor
 import FoundationNetworking
 #endif
 
-typealias MetricIdHash = String
-
 public final class MetricObserver {
+
+    private let hashParameterName = "hash"
 
     /**
      The default observer, to which created metrics are added.
@@ -40,16 +40,16 @@ public final class MetricObserver {
     /**
      The metrics observed by this instance.
 
-     The key is the metric `name`
+     The key is the metric `idHash`
      */
-    private var observedMetrics: [MetricId : AbstractMetric] = [:]
+    private var observedMetrics: [MetricIdHash : AbstractMetric] = [:]
 
     /**
      The remote observers of metrics logged with this instance.
 
      All updates to metrics are pushed to each remote observer.
      */
-    private var remoteObservers: [MetricId : Set<RemoteMetricObserver>] = [:]
+    private var remoteObservers: [MetricIdHash : Set<RemoteMetricObserver>] = [:]
 
     /**
      Create a new observer.
@@ -151,14 +151,14 @@ public final class MetricObserver {
     }
 
     func observe(metric: AbstractMetric) -> Bool {
-        guard observedMetrics[metric.id] == nil else {
+        guard observedMetrics[metric.idHash] == nil else {
             return false
         }
         if let oldObserver = metric.observer {
             oldObserver.remove(metric)
         }
         metric.observer = self
-        observedMetrics[metric.id] = metric
+        observedMetrics[metric.idHash] = metric
         return true
     }
 
@@ -177,7 +177,7 @@ public final class MetricObserver {
         guard metric.observer == self else {
             return
         }
-        observedMetrics[metric.id] = nil
+        observedMetrics[metric.idHash] = nil
         metric.observer = nil
     }
 
@@ -207,8 +207,8 @@ public final class MetricObserver {
 
     // MARK: Update metric values
 
-    func getMetric(with id: MetricId) throws -> AbstractMetric {
-        guard let metric = observedMetrics[id] else {
+    private func getMetric(with idHash: MetricIdHash) throws -> AbstractMetric {
+        guard let metric = observedMetrics[idHash] else {
             throw MetricError.unknownMetric
         }
         return metric
@@ -485,15 +485,15 @@ public final class MetricObserver {
     // MARK: Remote observers
 
     func push<T>(_ metric: AnyMetric<T>, to remote: RemoteMetricObserver) {
-        if remoteObservers[metric.id] == nil {
-            remoteObservers[metric.id] = [remote]
+        if remoteObservers[metric.idHash] == nil {
+            remoteObservers[metric.idHash] = [remote]
         } else {
-            remoteObservers[metric.id]!.insert(remote)
+            remoteObservers[metric.idHash]!.insert(remote)
         }
     }
 
     private func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) {
-        guard let observers = remoteObservers[metric.id] else {
+        guard let observers = remoteObservers[metric.idHash] else {
             return
         }
 
@@ -542,11 +542,11 @@ public final class MetricObserver {
     }
 
     private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
-        guard let metricId = request.parameters.get("id", as: String.self) else {
+        guard let metricIdHash = request.parameters.get(hashParameterName, as: String.self) else {
             throw Abort(.badRequest)
         }
-        let metric = try getMetric(with: metricId)
-        try accessManager.metricAccess(to: metricId, isAllowedForRequest: request)
+        let metric = try getMetric(with: metricIdHash)
+        try accessManager.metricAccess(to: metric.id, isAllowedForRequest: request)
         return metric
     }
 
@@ -585,7 +585,7 @@ public final class MetricObserver {
             return try self.encode(result)
         }
 
-        app.post(subPath, "last", ":id") { [weak self] request in
+        app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -598,7 +598,7 @@ public final class MetricObserver {
             return data
         }
 
-        app.post(subPath, "history", ":id") { [weak self] request in
+        app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -608,7 +608,7 @@ public final class MetricObserver {
             return try self.getHistoryFromLog(forMetric: metric, in: range)
         }
 
-        app.post(subPath, "push", ":id") { [weak self] request -> Void in
+        app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
             guard let self else {
                 throw Abort(.internalServerError)
             }

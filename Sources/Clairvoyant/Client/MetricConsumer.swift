@@ -45,7 +45,7 @@ public final class MetricConsumer {
 
     func lastValueData(for metric: MetricId) async throws -> Data? {
         do {
-            return try await post(path: "last/\(metric)")
+            return try await post(path: "last/\(metric.hashed())")
         } catch MetricError.noValueAvailable {
             return nil
         }
@@ -64,7 +64,7 @@ public final class MetricConsumer {
 
     func historyData(for metric: MetricId, in range: ClosedRange<Date>) async throws -> Data {
         let body = try encode(range)
-        return try await post(path: "history/\(metric)", body: body)
+        return try await post(path: "history/\(metric.hashed())", body: body)
     }
 
     public func history<T>(for metric: MetricId, in range: ClosedRange<Date>, type: T.Type = T.self) async throws -> [Timestamped<T>] where T: MetricValue {

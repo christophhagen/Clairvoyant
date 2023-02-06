@@ -164,6 +164,7 @@ let observer = MetricObserver(logFolder: url, authenticator: authenticator, logM
 Now that the metrics are protected, they can be accessed by authorized entities. 
 There are currently four main entry points. 
 All requests are `POST` requests, and require authentication. 
+**Note**: If the included clients are used, then the API is already correctly implemented and not important. 
 
 #### `/list`
 
@@ -172,9 +173,13 @@ The request calls the function `metricListAccess(isAllowedForRequest:)` or `metr
 
 The response is an array of `MetricDescription`, encoded with the binary encoder assigned to the `MetricObserver`.
 
-#### `/last/<METRIC_ID>`
+#### `/last/<METRIC_ID_HASH>`
 
-Get the last value of the metric.
+Get the last value of the metric. The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters). Authentication of the request depends on the chosen implementation.
+
+#### `history/<METRIC_ID_HASH>`
+
+Get the logged values of a metric in a specified time interval. The time interval is provided in the request body as a binary encoding of a `ClosedRange<Date>`. Authentication of the request depends on the chosen implementation.
 
 ### Pushing to other servers
 
