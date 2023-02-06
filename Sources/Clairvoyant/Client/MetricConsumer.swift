@@ -76,6 +76,7 @@ public final class MetricConsumer {
         let url = serverUrl.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.httpBody = body
         for (key, value) in headers {
             request.addValue(value, forHTTPHeaderField: key)
         }
