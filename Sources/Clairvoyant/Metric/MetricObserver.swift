@@ -112,10 +112,12 @@ public final class MetricObserver {
     /**
      Create a metric and add it to the observer.
      - Parameter id: The id of the metric.
+     - Parameter name: A descriptive name of the metric
+     - Parameter description: A textual description of the metric
      - Returns: The created metric.
      */
-    public func addMetric<T>(id: String) -> Metric<T> where T: MetricValue {
-        let metric = Metric<T>(id)
+    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil) -> Metric<T> where T: MetricValue {
+        let metric = Metric<T>(id, name: name, description: description)
         observe(metric)
         return metric
     }
