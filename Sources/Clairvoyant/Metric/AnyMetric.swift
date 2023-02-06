@@ -8,6 +8,9 @@ import Foundation
  */
 public class AnyMetric<T> where T: MetricValue {
 
+    /**
+     The main info about the metric.
+     */
     public let description: MetricDescription
 
     /**
