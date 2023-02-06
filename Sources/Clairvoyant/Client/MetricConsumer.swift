@@ -72,14 +72,11 @@ public final class MetricConsumer {
         return try decode(logData: data)
     }
 
-    private func post(path: String, body: Data? = nil, headers: [String: String] = [:]) async throws -> Data {
+    private func post(path: String, body: Data? = nil) async throws -> Data {
         let url = serverUrl.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = body
-        for (key, value) in headers {
-            request.addValue(value, forHTTPHeaderField: key)
-        }
         accessProvider.addAccessDataToMetricRequest(&request)
         do {
             let (data, response) = try await urlSessionData(session, for: request)
