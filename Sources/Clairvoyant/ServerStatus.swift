@@ -72,5 +72,5 @@ extension ServerStatus: Timestampable { }
 
 extension ServerStatus: MetricValue {
     
-    public static let valueType: MetricType = .enumeration
+    public static let valueType: MetricType = .serverStatus
 }
