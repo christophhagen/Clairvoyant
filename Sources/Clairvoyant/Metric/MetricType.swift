@@ -50,7 +50,7 @@ public enum MetricType {
     }
 
     /// The Swift type associated with the metric type
-    var type: (any MetricValue.Type)? {
+    public var type: (any MetricValue.Type)? {
         switch self {
         case .integer:
             return Int.self
