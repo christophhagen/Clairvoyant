@@ -214,7 +214,7 @@ public final class MetricObserver {
         return metric
     }
 
-    func update<T>(_ value: Timestamped<T>, for metric: Metric<T>) -> Bool where T: MetricValue {
+    func update<T>(_ value: Timestamped<T>, for metric: AnyMetric<T>) -> Bool where T: MetricValue {
         if let error = ensureExistenceOfLogFolder() {
             logError("Failed to create log folder: \(error)", for: metric.id)
             return false
@@ -622,13 +622,12 @@ public final class MetricObserver {
                 throw Abort(.badRequest)
             }
 
-            guard metric.verifyEncoding(of: valueData, decoder: self.decoder) else {
+            // Save value for metric
+            guard let success = metric.update(valueData, decoder: self.decoder) else {
                 // Invalid data will ruin decoding of log files
                 throw Abort(.notAcceptable)
             }
-            
-            // Save value for metric
-            guard self.update(valueData, for: metric) else {
+            guard success else {
                 throw Abort(.internalServerError)
             }
         }

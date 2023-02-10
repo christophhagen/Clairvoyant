@@ -32,6 +32,9 @@ public class AnyMetric<T> where T: MetricValue {
         false
     }
 
+    /// The cached last value of the metric
+    private var _lastValue: Timestamped<T>? = nil
+
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
@@ -52,10 +55,25 @@ public class AnyMetric<T> where T: MetricValue {
 
     /**
      Create a new metric.
+     - Parameter id: The unique id of the metric.
+     - Parameter dataType: The raw type of the values contained in the metric
+     - Parameter name: A descriptive name of the metric
+     - Parameter description: A textual description of the metric
+     */
+    public convenience init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil) {
+        self.init(id: id, observer: .standard, name: name, description: description)
+    }
+
+    /**
+     Create a new metric.
      - Parameter description: A metric description
      */
     public convenience init(_ description: MetricDescription) {
         self.init(description: description, observer: .standard)
+    }
+
+    convenience init(unobserved id: String, name: String?, description: String?) {
+        self.init(id: id, observer: nil, name: name, description: description)
     }
 
     /**
@@ -66,7 +84,11 @@ public class AnyMetric<T> where T: MetricValue {
      - Returns: The last value of the metric, timestamped, or nil, if no value could be provided.
      */
     public func lastValue() -> Timestamped<T>? {
-        observer?.getLastValue(for: self)
+        _lastValue ?? observer?.getLastValue(for: self)
+    }
+
+    func didUpdate(with value: Timestamped<T>) {
+        _lastValue = value
     }
 
     /**
@@ -104,6 +126,42 @@ public class AnyMetric<T> where T: MetricValue {
         observer.push(self, to: remoteObserver)
         return true
     }
+
+    /**
+     Update the value of the metric.
+
+     This function will create a new timestamped value and forward it for logging to the observer.
+     - Parameter value: The new value to set.
+     - Parameter timestamp: The timestamp of the value (defaults to the current time)
+     - Returns: `true` if the value was stored, `false` if either no observer is registered, or the observer failed to store the value.
+     */
+    @discardableResult
+    public func update(_ value: T, timestamp: Date = Date()) -> Bool {
+        if let lastValue = lastValue()?.value, lastValue == value {
+            return true
+        }
+        let dataPoint = Timestamped(timestamp: timestamp, value: value)
+        return update(dataPoint)
+    }
+
+    /**
+     Update the value of the metric.
+
+     This function will create a new timestamped value and forward it for logging to the observer.
+     - Parameter value: The timestamped value to set
+     - Returns: `true` if the value was stored, `false` if either no observer is registered, or the observer failed to store the value.
+     */
+    @discardableResult
+    public func update(_ value: Timestamped<T>) -> Bool {
+        guard let observer else {
+            return false
+        }
+        guard observer.update(value, for: self) else {
+            return false
+        }
+        _lastValue = value
+        return true
+    }
 }
 
 extension AnyMetric: AbstractMetric {
@@ -112,7 +170,12 @@ extension AnyMetric: AbstractMetric {
         T.valueType
     }
 
-    func verifyEncoding(of data: Data, decoder: BinaryDecoder) -> Bool {
-        (try? decoder.decode(T.self, from: data)) != nil
+    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) -> Bool? {
+        do {
+            let value = try decoder.decode(Timestamped<T>.self, from: dataPoint)
+            return update(value)
+        } catch {
+            return nil
+        }
     }
 }

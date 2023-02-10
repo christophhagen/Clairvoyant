@@ -22,7 +22,7 @@ protocol AbstractMetric: AnyObject {
 
     var observer: MetricObserver? { get set }
 
-    func verifyEncoding(of data: Data, decoder: BinaryDecoder) -> Bool
+    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) -> Bool?
 }
 
 extension AbstractMetric {
