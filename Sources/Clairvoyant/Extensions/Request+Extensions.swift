@@ -10,7 +10,7 @@ extension Request {
 
     func token() throws -> Data {
         guard let string = headers.first(name: "token") else {
-            return Data()
+            throw Abort(.badRequest)
         }
         guard let data = Data(base64Encoded: string) else {
             throw Abort(.badRequest)
