@@ -9,6 +9,7 @@ public enum MetricType {
     case enumeration
     case customType(named: String)
     case serverStatus
+    //case httpStatus
 
     var stringDescription: String {
         switch self {
@@ -28,6 +29,8 @@ public enum MetricType {
             return name
         case .serverStatus:
             return "Status"
+        //case .httpStatus:
+        //    return "HTTP Status"
         }
     }
 
@@ -40,8 +43,29 @@ public enum MetricType {
         case "Data": self = .data
         case "Enum": self = .enumeration
         case "Status": self = .serverStatus
+        // case "HTTP Status": self = .httpStatus
         default:
             self = .customType(named: stringDescription)
+        }
+    }
+
+    /// The Swift type associated with the metric type
+    var type: (any MetricValue.Type)? {
+        switch self {
+        case .integer:
+            return Int.self
+        case .double:
+            return Double.self
+        case .boolean:
+            return Bool.self
+        case .string:
+            return String.self
+        case .data:
+            return Data.self
+        case .enumeration, .customType:
+            return nil
+        case .serverStatus:
+            return ServerStatus.self
         }
     }
 }
