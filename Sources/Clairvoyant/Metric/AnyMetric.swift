@@ -38,11 +38,24 @@ public class AnyMetric<T> where T: MetricValue {
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      */
-    init(id: String, observer: MetricObserver?, name: String?, description: String?) {
-        self.description = .init(id: id, dataType: T.valueType, name: name, description: description)
-        self.idHash = id.hashed()
+    convenience init(id: String, observer: MetricObserver?, name: String?, description: String?) {
+        self.init(description: .init(id: id, dataType: T.valueType, name: name, description: description),
+                  observer: observer)
+    }
+
+    init(description: MetricDescription, observer: MetricObserver?) {
+        self.description = description
+        self.idHash = description.id.hashed()
         self.observer = nil
         _ = observer?.observe(metric: self)
+    }
+
+    /**
+     Create a new metric.
+     - Parameter description: A metric description
+     */
+    public convenience init(_ description: MetricDescription) {
+        self.init(description: description, observer: .standard)
     }
 
     /**
