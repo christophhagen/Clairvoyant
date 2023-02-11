@@ -4,7 +4,7 @@ import CBORCoding
 import FoundationNetworking
 #endif
 
-public final class MetricConsumer {
+public actor MetricConsumer {
 
     public let serverUrl: URL
 

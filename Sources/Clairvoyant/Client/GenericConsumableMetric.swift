@@ -1,21 +1,21 @@
 import Foundation
 import CBORCoding
 
-public final class GenericConsumableMetric {
+public actor GenericConsumableMetric {
 
     let consumer: MetricConsumer
 
     public let description: MetricDescription
 
-    public var id: MetricId {
+    public nonisolated var id: MetricId {
         description.id
     }
 
-    public var dataType: MetricType {
+    public nonisolated var dataType: MetricType {
         description.dataType
     }
 
-    public var name: String? {
+    public nonisolated var name: String? {
         description.name
     }
 
@@ -64,29 +64,29 @@ public final class GenericConsumableMetric {
         let data = try await consumer.historyData(for: id, in: range)
         switch dataType {
         case .integer:
-            return try decode(data, type: Int.self)
+            return try await decode(data, type: Int.self)
         case .double:
-            return try decode(data, type: Double.self)
+            return try await decode(data, type: Double.self)
         case .boolean:
-            return try decode(data, type: Bool.self)
+            return try await decode(data, type: Bool.self)
         case .string:
-            return try decode(data, type: String.self)
+            return try await decode(data, type: String.self)
         case .data:
-            return try decode(data, type: Data.self)
+            return try await decode(data, type: Data.self)
         case .enumeration:
-            return try consumer.decode(logData: data).map { element in
+            return try await consumer.decode(logData: data).map { element in
                 let value: UInt8 = try decoder.decode(from: element.data)
                 return (description: "Enum(\(value))", timestamp: element.timestamp)
             }
         case .customType:
-            return try consumer.decode(logData: data).map { ("\($0.data)", $0.timestamp) }
+            return try await consumer.decode(logData: data).map { ("\($0.data)", $0.timestamp) }
         case .serverStatus:
-            return try decode(data, type: ServerStatus.self)
+            return try await decode(data, type: ServerStatus.self)
         }
     }
 
-    func decode<T>(_ data: Data, type: T.Type = T.self) throws -> [(description: String, timestamp: Date)] where T: Decodable {
-        try consumer.decode(logData: data).map { element in
+    func decode<T>(_ data: Data, type: T.Type = T.self) async throws -> [(description: String, timestamp: Date)] where T: Decodable {
+        try await consumer.decode(logData: data).map { element in
             let value: T = try decoder.decode(from: element.data)
             return (description: "\(value)", timestamp: element.timestamp)
         }

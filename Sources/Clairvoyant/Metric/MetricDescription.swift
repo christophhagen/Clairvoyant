@@ -11,6 +11,8 @@ public struct MetricDescription {
     /// The data type of the values in the metric
     public let dataType: MetricType
 
+    public let canBeUpdatedByRemote: Bool
+
     /// A name to display for the metric
     public let name: String?
 
@@ -23,10 +25,12 @@ public struct MetricDescription {
      - Parameter dataType: The data type of the values in the metric
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
+     - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      */
-    public init(id: String, dataType: MetricType, name: String? = nil, description: String? = nil) {
+    public init(id: String, dataType: MetricType, canBeUpdatedByRemote: Bool = false, name: String? = nil, description: String? = nil) {
         self.id = id
         self.dataType = dataType
+        self.canBeUpdatedByRemote = canBeUpdatedByRemote
         self.name = name
         self.description = description
     }
@@ -39,6 +43,7 @@ extension MetricDescription: Codable {
         case dataType = 2
         case name = 3
         case description = 4
+        case canBeUpdatedByRemote = 5
     }
 
 }

@@ -1,12 +1,12 @@
 import Foundation
 
-public final class ConsumableMetric<T> where T: MetricValue {
+public actor ConsumableMetric<T> where T: MetricValue {
 
     let consumer: MetricConsumer
 
     public let description: MetricDescription
 
-    public var id: MetricId {
+    public nonisolated var id: MetricId {
         description.id
     }
 

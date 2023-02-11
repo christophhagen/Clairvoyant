@@ -5,7 +5,7 @@ import Vapor
 import FoundationNetworking
 #endif
 
-public final class MetricObserver {
+public actor MetricObserver {
 
     private let hashParameterName = "hash"
 
@@ -68,15 +68,19 @@ public final class MetricObserver {
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
         encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
-        decoder: BinaryDecoder = CBORDecoder()) {
+        decoder: BinaryDecoder = CBORDecoder()) async {
 
-        self.uniqueId = .random()
-        self.encoder = encoder
-        self.decoder = decoder
-        self.logFolder = logFolder
-        self.accessManager = accessManager
-        self.logMetric = .init(unobserved: logMetricId, name: logMetricName, description: logMetricDescription)
-        observe(logMetric)
+            self.uniqueId = .random()
+            self.encoder = encoder
+            self.decoder = decoder
+            self.logFolder = logFolder
+            self.accessManager = accessManager
+            self.logMetric = await .init(
+                unobserved: logMetricId,
+                name: logMetricName,
+                description: logMetricDescription,
+                canBeUpdatedByRemote: false)
+            await observe(logMetric)
     }
 
     private let byteCountLength = 2
@@ -116,9 +120,9 @@ public final class MetricObserver {
      - Parameter description: A textual description of the metric
      - Returns: The created metric.
      */
-    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil) -> Metric<T> where T: MetricValue {
-        let metric = Metric<T>(id, name: name, description: description)
-        observe(metric)
+    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil) async -> Metric<T> where T: MetricValue {
+        let metric = await Metric<T>(id, name: name, description: description)
+        await observe(metric)
         return metric
     }
 
@@ -132,32 +136,18 @@ public final class MetricObserver {
      - Note: If the metric was previously observed by another observer, then it will be removed from the old observer.
      */
     @discardableResult
-    public func observe<T>(_ metric: Metric<T>) -> Bool {
-        observe(metric: metric)
+    public func observe<T>(_ metric: Metric<T>) async -> Bool {
+        await observe(metric: metric)
     }
 
-    /**
-     Observe a metric published by a remote instance.
-
-     Observing a remote metric merely states an intent to accept updates from another instance.
-     The remote instance is responsible for pushing updates to the local observer.
-     - Parameter metric: The metric to observe.
-     - Returns: `true`, if the metric was added to the observer, `false` if a metric with the same `id` already exists.
-     - Note: If the metric was previously observed by another observer, then it will be removed from the old observer.
-     */
-    @discardableResult
-    public func observe<T>(_ metric: RemoteMetric<T>) -> Bool {
-        observe(metric: metric)
-    }
-
-    func observe(metric: AbstractMetric) -> Bool {
+    func observe(metric: AbstractMetric) async -> Bool {
         guard observedMetrics[metric.idHash] == nil else {
             return false
         }
-        if let oldObserver = metric.observer {
-            oldObserver.remove(metric)
+        if let oldObserver = await metric.getObserver() {
+            await oldObserver.remove(metric)
         }
-        metric.observer = self
+        await metric.set(observer: self)
         observedMetrics[metric.idHash] = metric
         return true
     }
@@ -169,16 +159,16 @@ public final class MetricObserver {
      - Parameter metric: The metric to remove.
      - Note: If the metric was not previously observed by this observer, then it will not be changed, and may still be assigned to a different observer.
      */
-    public func remove<T>(metric: AnyMetric<T>) {
-        remove(metric)
+    public func remove<T>(metric: Metric<T>) async {
+        await remove(metric)
     }
 
-    func remove(_ metric: AbstractMetric) {
-        guard metric.observer == self else {
+    func remove(_ metric: AbstractMetric) async {
+        guard await metric.getObserver() == self else {
             return
         }
         observedMetrics[metric.idHash] = nil
-        metric.observer = nil
+        await metric.set(observer: nil)
     }
 
     // MARK: Logging
@@ -188,10 +178,11 @@ public final class MetricObserver {
      - Parameter message: The log entry to add.
      - Returns: `true` if the message was added to the log, `false` if the message could not be saved.
      */
-    @discardableResult
-    public func log(_ message: String) -> Bool {
+    public func log(_ message: String) {
         print(message)
-        return logMetric.update(message)
+        Task {
+            await logMetric.update(message)
+        }
     }
 
     private func logError(_ message: String, for metric: MetricId) {
@@ -202,7 +193,9 @@ public final class MetricObserver {
         guard metric == logMetric.id else {
             return
         }
-        logMetric.update(entry)
+        Task {
+            await logMetric.update(entry)
+        }
     }
 
     // MARK: Update metric values
@@ -214,7 +207,7 @@ public final class MetricObserver {
         return metric
     }
 
-    func update<T>(_ value: Timestamped<T>, for metric: AnyMetric<T>) -> Bool where T: MetricValue {
+    func update<T>(_ value: Timestamped<T>, for metric: Metric<T>) -> Bool where T: MetricValue {
         if let error = ensureExistenceOfLogFolder() {
             logError("Failed to create log folder: \(error)", for: metric.id)
             return false
@@ -484,7 +477,7 @@ public final class MetricObserver {
 
     // MARK: Remote observers
 
-    func push<T>(_ metric: AnyMetric<T>, to remote: RemoteMetricObserver) {
+    func push<T>(_ metric: Metric<T>, to remote: RemoteMetricObserver) {
         if remoteObservers[metric.idHash] == nil {
             remoteObservers[metric.idHash] = [remote]
         } else {
@@ -571,8 +564,8 @@ public final class MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            let list = self.getListOfRecordedMetrics()
-            return try self.encode(list)
+            let list = await self.getListOfRecordedMetrics()
+            return try await self.encode(list)
         }
 
         app.post(subPath, "last", "all") { [weak self] request in
@@ -581,8 +574,8 @@ public final class MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            let result = self.getLastValuesOfAllMetrics()
-            return try self.encode(result)
+            let result = await self.getLastValuesOfAllMetrics()
+            return try await self.encode(result)
         }
 
         app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
@@ -590,9 +583,9 @@ public final class MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request)
+            let metric = try await self.getAccessibleMetric(request)
 
-            guard let data = self.getLastValueData(for: metric) else {
+            guard let data = await self.getLastValueData(for: metric) else {
                 throw MetricError.noValueAvailable
             }
             return data
@@ -603,9 +596,9 @@ public final class MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request)
+            let metric = try await self.getAccessibleMetric(request)
             let range = try request.decodeBody(as: ClosedRange<Date>.self)
-            return try self.getHistoryFromLog(forMetric: metric, in: range)
+            return try await self.getHistoryFromLog(forMetric: metric, in: range)
         }
 
         app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
@@ -613,8 +606,8 @@ public final class MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try self.getAccessibleMetric(request)
-            guard metric.isRemote else {
+            let metric = try await self.getAccessibleMetric(request)
+            guard metric.canBeUpdatedByRemote else {
                 throw Abort(.expectationFailed)
             }
 
@@ -623,7 +616,7 @@ public final class MetricObserver {
             }
 
             // Save value for metric
-            guard let success = metric.update(valueData, decoder: self.decoder) else {
+            guard let success = await metric.update(valueData, decoder: self.decoder) else {
                 // Invalid data will ruin decoding of log files
                 throw Abort(.notAcceptable)
             }

@@ -18,11 +18,13 @@ protocol AbstractMetric: AnyObject {
 
     var dataType: MetricType { get }
 
-    var isRemote: Bool { get }
+    var canBeUpdatedByRemote: Bool { get }
 
-    var observer: MetricObserver? { get set }
+    func getObserver() async -> MetricObserver?
 
-    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) -> Bool?
+    func set(observer: MetricObserver?) async
+
+    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) async -> Bool?
 }
 
 extension AbstractMetric {
