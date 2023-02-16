@@ -24,9 +24,9 @@ public enum MetricError: UInt8, Error {
     case failedToDecode = 4
 
     /**
-     The requested metric was not found
+     The requested metric was not found, or a duplicate id was used
      */
-    case unknownMetric = 5
+    case badMetricId = 5
 
     /**
      The log file on the server could not be opened.
@@ -54,6 +54,8 @@ public enum MetricError: UInt8, Error {
 
     case typeMismatch = 12
 
+    case noObserver = 13
+
 }
 
 extension MetricError {
@@ -63,8 +65,8 @@ extension MetricError {
         case .failedToEncode: return .failedDependency // 424
         case .logFileCorrupted: return .unprocessableEntity // 422
         case .accessDenied: return .unauthorized // 401
+        case .badMetricId: return .preconditionFailed // 412
         case .failedToDecode: return .expectationFailed // 417
-        case .unknownMetric: return .preconditionFailed // 412
         case .failedToOpenLogFile: return .locked // 423
         case .requestFailed: return .serviceUnavailable // 503
         case .notFound: return .notFound // 404
@@ -72,6 +74,7 @@ extension MetricError {
         case .internalError: return .internalServerError // 500
         case .noValueAvailable: return .gone // 410
         case .typeMismatch: return .preconditionRequired // 428
+        case .noObserver: return .misdirectedRequest // 503
         }
     }
 
@@ -80,14 +83,15 @@ extension MetricError {
         case 424: self = .failedToEncode
         case 422: self = .logFileCorrupted
         case 401: self = .accessDenied
+        case 412: self = .badMetricId
         case 417: self = .failedToDecode
-        case 412: self = .unknownMetric
         case 423: self = .failedToOpenLogFile
         case 503: self = .requestFailed
         case 404: self = .notFound
         case 502: self = .badGateway
         case 500: self = .internalError
         case 410: self = .noValueAvailable
+        case 421: self = .noObserver
         case 428: self = .typeMismatch
         default:
             return nil

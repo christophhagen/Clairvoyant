@@ -24,7 +24,13 @@ protocol AbstractMetric: AnyObject {
 
     func set(observer: MetricObserver?) async
 
-    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) async -> Bool?
+    func update(_ dataPoint: TimestampedValueData) async throws
+
+    func lastValueData() async -> Data?
+
+    func history(from startDate: Date, to endDate: Date, maximumValueCount: Int?) async -> Data
+
+    func log(_ message: String) async
 }
 
 extension AbstractMetric {

@@ -22,7 +22,7 @@ public actor Metric<T> where T: MetricValue {
      It is only available internally, since it is not required by the public interface.
      Hashing is performed to prevent special characters from creating issues with file paths.
      */
-    let idHash: MetricIdHash
+    nonisolated let idHash: MetricIdHash
 
     /**
      A reference to the collector of the metric for logging and processing.
@@ -32,6 +32,7 @@ public actor Metric<T> where T: MetricValue {
     /// The cached last value of the metric
     private var _lastValue: Timestamped<T>? = nil
 
+    private let fileWriter: LogFileWriter
 
     /// Indicate if the metric can be updated by a remote user
     public nonisolated var canBeUpdatedByRemote: Bool {
@@ -53,23 +54,54 @@ public actor Metric<T> where T: MetricValue {
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      */
-    init(id: String, observer: MetricObserver?, canBeUpdatedByRemote: Bool, name: String?, description: String?) async {
+    init(id: String, observer: MetricObserver, canBeUpdatedByRemote: Bool, name: String?, description: String?) {
         let description = MetricDescription(
             id: id,
             dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             name: name,
             description: description)
-        await self.init(description: description,
-                        observer: observer)
+        self.init(description: description,
+                  observer: observer)
     }
 
-    init(description: MetricDescription, observer: MetricObserver?) async {
+    private init(description: MetricDescription, observer: MetricObserver) {
         self.description = description
-        self.idHash = description.id.hashed()
-        self.observer = nil
-        _ = await observer?.observe(metric: self)
+        let idHash = description.id.hashed()
+        self.idHash = idHash
+        self.observer = observer
+        self.fileWriter = .init(
+            id: description.id,
+            hash: idHash,
+            folder: observer.logFolder.appendingPathComponent(idHash),
+            encoder: observer.encoder,
+            decoder: observer.decoder)
+        Task {
+            await fileWriter.set(metric: self)
+        }
     }
+
+    init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder) {
+        self.description = .init(
+            id: id,
+            dataType: T.valueType,
+            canBeUpdatedByRemote: canBeUpdatedByRemote,
+            name: name,
+            description: description)
+        let idHash = id.hashed()
+        self.idHash = idHash
+        self.observer = nil
+        self.fileWriter = .init(
+            id: id,
+            hash: idHash,
+            folder: logFolder,
+            encoder: encoder,
+            decoder: decoder)
+        Task {
+            await fileWriter.set(metric: self)
+        }
+    }
+
 
     /**
      Create a new metric.
@@ -79,20 +111,39 @@ public actor Metric<T> where T: MetricValue {
      - Parameter description: A textual description of the metric
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      */
-    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) async {
-        await self.init(id: id, observer: .standard, canBeUpdatedByRemote: canBeUpdatedByRemote, name: name, description: description)
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) async throws {
+        guard let observer = MetricObserver.standard else {
+            throw MetricError.noObserver
+        }
+        self.init(
+            id: id,
+            observer: observer,
+            canBeUpdatedByRemote: canBeUpdatedByRemote,
+            name: name,
+            description: description)
+        try await observer.observe(self)
     }
 
     /**
      Create a new metric.
      - Parameter description: A metric description
      */
-    public init(_ description: MetricDescription) async {
-        await self.init(description: description, observer: .standard)
+    public init(_ description: MetricDescription) async throws {
+        guard let observer = MetricObserver.standard else {
+            throw MetricError.noObserver
+        }
+        self.init(description: description, observer: observer)
+        try await observer.observe(self)
     }
 
-    init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool) async {
-        await self.init(id: id, observer: nil, canBeUpdatedByRemote: canBeUpdatedByRemote, name: name, description: description)
+    func log(_ message: String) {
+        guard let observer else {
+            print("[\(id)] \(message)")
+            return
+        }
+        Task {
+            await observer.log(message, for: id)
+        }
     }
 
     /**
@@ -106,7 +157,18 @@ public actor Metric<T> where T: MetricValue {
         if let _lastValue {
             return _lastValue
         }
-        return await observer?.getLastValue(for: self)
+        return await fileWriter.lastValue()
+    }
+
+    func lastValueData() async -> Data? {
+        if let _lastValue {
+            return try? await fileWriter.encode(_lastValue)
+        }
+        return await fileWriter.lastValueData()
+    }
+
+    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
+        await fileWriter.getHistoryData(startingFrom: startDate, upTo: endDate, maximumValueCount: maximumValueCount)
     }
 
     /**
@@ -115,8 +177,8 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged within the given date range.
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func getHistory(in range: ClosedRange<Date>) async throws -> [Timestamped<T>] {
-        try await observer?.getHistoryFromLog(for: self, in: range) ?? []
+    public func history(in range: ClosedRange<Date>) async -> [Timestamped<T>] {
+        await fileWriter.getHistory(in: range)
     }
 
     /**
@@ -124,16 +186,10 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged for the metric
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func getFullHistoryFromLogFile() async throws -> [Timestamped<T>] {
-        try await observer?.getFullHistoryFromLog(for: self) ?? []
-    }
-
-    /**
-     Remove the metric from its assigned observer to stop logging updates.
-     - Note: If no observer is assigned, then this function does nothing.
-     */
-    public func removeFromObserver() async {
-        await observer?.remove(self)
+    public func fullHistory() async -> [Timestamped<T>] {
+        let start = Date(timeIntervalSince1970: 0)
+        let end = Date()
+        return await history(in: start...end)
     }
 
     @discardableResult
@@ -148,41 +204,33 @@ public actor Metric<T> where T: MetricValue {
     /**
      Update the value of the metric.
 
-     This function will create a new timestamped value and forward it for logging to the observer.
+     This function will create a new timestamped value and forward it for logging.
      - Parameter value: The new value to set.
      - Parameter timestamp: The timestamp of the value (defaults to the current time)
-     - Returns: `true` if the value was stored, `false` if either no observer is registered, or the observer failed to store the value.
      */
-    @discardableResult
-    public func update(_ value: T, timestamp: Date = Date()) async -> Bool {
+    public func update(_ value: T, timestamp: Date = Date()) async throws {
         if let lastValue = await lastValue()?.value, lastValue == value {
-            return true
+            return
         }
         let dataPoint = Timestamped(timestamp: timestamp, value: value)
-        return await update(dataPoint)
+        try await update(dataPoint)
     }
 
     /**
      Update the value of the metric.
 
-     This function will create a new timestamped value and forward it for logging to the observer.
+     This function will create a new timestamped value and forward it for logging.
      - Parameter value: The timestamped value to set
-     - Returns: `true` if the value was stored, `false` if either no observer is registered, or the observer failed to store the value.
      */
-    @discardableResult
-    public func update(_ value: Timestamped<T>) async -> Bool {
-        guard let observer else {
-            return false
-        }
-        guard await observer.update(value, for: self) else {
-            return false
-        }
+    public func update(_ value: Timestamped<T>) async throws {
+        let data = try await fileWriter.write(value)
         _lastValue = value
-        return true
+        await observer?.pushValueToRemoteObservers(data, for: self)
     }
 }
 
 extension Metric: AbstractMetric {
+
 
     nonisolated var dataType: MetricType {
         T.valueType
@@ -196,12 +244,8 @@ extension Metric: AbstractMetric {
         self.observer = observer
     }
 
-    func update(_ dataPoint: TimestampedValueData, decoder: BinaryDecoder) async -> Bool? {
-        do {
-            let value = try decoder.decode(Timestamped<T>.self, from: dataPoint)
-            return await update(value)
-        } catch {
-            return nil
-        }
+    func update(_ dataPoint: TimestampedValueData) async throws {
+        let value: Timestamped<T> = try await fileWriter.decode(dataPoint)
+        try await update(value)
     }
 }

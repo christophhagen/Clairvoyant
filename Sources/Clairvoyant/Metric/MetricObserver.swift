@@ -23,13 +23,10 @@ public actor MetricObserver {
     public let accessManager: MetricRequestAccessManager
 
     /// The encoder used to convert data points to binary data for logging
-    private let encoder: BinaryEncoder
+    let encoder: BinaryEncoder
 
     /// The decoder used to decode log entries when providing history data
-    private let decoder: BinaryDecoder
-
-    /// The internal file manager used to access files
-    private let fileManager: FileManager = .default
+    let decoder: BinaryDecoder
 
     /// The internal metric used for logging
     private let logMetric: Metric<String>
@@ -75,40 +72,16 @@ public actor MetricObserver {
             self.decoder = decoder
             self.logFolder = logFolder
             self.accessManager = accessManager
-            self.logMetric = await .init(
+            self.logMetric = .init(
                 unobserved: logMetricId,
                 name: logMetricName,
                 description: logMetricDescription,
-                canBeUpdatedByRemote: false)
-            await observe(logMetric)
-    }
-
-    private let byteCountLength = 2
-
-    // MARK: File paths
-
-    private func logFileUrl(for metricLogFileId: MetricIdHash) -> URL {
-        logFolder.appendingPathComponent(metricLogFileId)
-    }
-
-    private func lastValueFileUrl(for metricLogFileId: MetricIdHash) -> URL {
-        logFolder.appendingPathComponent(metricLogFileId + "-last")
-    }
-
-    private func exists(_ url: URL) -> Bool {
-        fileManager.fileExists(atPath: url.path)
-    }
-
-    private func ensureExistenceOfLogFolder() -> Error? {
-        guard !exists(logFolder) else {
-            return nil
-        }
-        do {
-            try fileManager.createDirectory(at: logFolder, withIntermediateDirectories: true)
-        } catch {
-            return error
-        }
-        return nil
+                canBeUpdatedByRemote: false,
+                logFolder: logFolder,
+                encoder: encoder,
+                decoder: decoder)
+            // No previous metrics, so observing can't fail
+            try! observe(logMetric)
     }
 
     // MARK: Adding metrics
@@ -120,55 +93,21 @@ public actor MetricObserver {
      - Parameter description: A textual description of the metric
      - Returns: The created metric.
      */
-    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil) async -> Metric<T> where T: MetricValue {
-        let metric = await Metric<T>(id, name: name, description: description)
-        await observe(metric)
+    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) async throws -> Metric<T> where T: MetricValue {
+        let metric = Metric<T>(
+            id: id,
+            observer: self,
+            canBeUpdatedByRemote: canBeUpdatedByRemote,
+            name: name, description: description)
+        try observe(metric)
         return metric
     }
 
-    /**
-     Observe a metric.
-
-     Calling this function with a metric will cause all updates to the metric to be forwarded to this observer,
-     which will log it and provide it over the web interface.
-     - Parameter metric: The metric to observe.
-     - Returns: `true`, if the metric was added to the observer, `false` if a metric with the same `id` already exists.
-     - Note: If the metric was previously observed by another observer, then it will be removed from the old observer.
-     */
-    @discardableResult
-    public func observe<T>(_ metric: Metric<T>) async -> Bool {
-        await observe(metric: metric)
-    }
-
-    func observe(metric: AbstractMetric) async -> Bool {
+    func observe(_ metric: AbstractMetric) throws {
         guard observedMetrics[metric.idHash] == nil else {
-            return false
+            throw MetricError.badMetricId
         }
-        if let oldObserver = await metric.getObserver() {
-            await oldObserver.remove(metric)
-        }
-        await metric.set(observer: self)
         observedMetrics[metric.idHash] = metric
-        return true
-    }
-
-    /**
-     Stop observing a metric.
-
-     Calling this function with a metric will prevent the metric from being logged by this observer.
-     - Parameter metric: The metric to remove.
-     - Note: If the metric was not previously observed by this observer, then it will not be changed, and may still be assigned to a different observer.
-     */
-    public func remove<T>(metric: Metric<T>) async {
-        await remove(metric)
-    }
-
-    func remove(_ metric: AbstractMetric) async {
-        guard await metric.getObserver() == self else {
-            return
-        }
-        observedMetrics[metric.idHash] = nil
-        await metric.set(observer: nil)
     }
 
     // MARK: Logging
@@ -181,11 +120,11 @@ public actor MetricObserver {
     public func log(_ message: String) {
         print(message)
         Task {
-            await logMetric.update(message)
+            try await logMetric.update(message)
         }
     }
 
-    private func logError(_ message: String, for metric: MetricId) {
+    func log(_ message: String, for metric: MetricId) {
         let entry = "[\(metric)] " + message
         print(entry)
 
@@ -194,7 +133,7 @@ public actor MetricObserver {
             return
         }
         Task {
-            await logMetric.update(entry)
+            try await logMetric.update(entry)
         }
     }
 
@@ -202,277 +141,9 @@ public actor MetricObserver {
 
     private func getMetric(with idHash: MetricIdHash) throws -> AbstractMetric {
         guard let metric = observedMetrics[idHash] else {
-            throw MetricError.unknownMetric
+            throw MetricError.badMetricId
         }
         return metric
-    }
-
-    func update<T>(_ value: Timestamped<T>, for metric: Metric<T>) -> Bool where T: MetricValue {
-        if let error = ensureExistenceOfLogFolder() {
-            logError("Failed to create log folder: \(error)", for: metric.id)
-            return false
-        }
-
-        do {
-            let dataPoint = try value.encode(using: encoder)
-            return update(dataPoint, for: metric)
-        } catch {
-            logError("Failed to encode value \(value.value)", for: metric.id)
-            return false
-        }
-
-    }
-
-    private func update(_ dataPoint: TimestampedValueData, for metric: AbstractMetric) -> Bool {
-        if let error = ensureExistenceOfLogFolder() {
-            logError("Failed to create log folder: \(error)", for: metric.id)
-            return false
-        }
-
-        // Save last value in separate location
-        do {
-            let url = lastValueFileUrl(for: metric.idHash)
-            try dataPoint.write(to: url)
-        } catch {
-            logError("Failed to save last value: \(error)", for: metric.id)
-        }
-
-        // Write data to log file
-        guard appendToLogFile(dataPoint, metric: metric) else {
-            // TODO: Save point for retry?
-            return false
-        }
-
-        pushValueToRemoteObservers(dataPoint, for: metric)
-        return true
-    }
-
-    private func appendToLogFile(_ dataPoint: TimestampedValueData, metric: AbstractMetric) -> Bool {
-        // Existence of log folder is ensured at this point
-        let url = logFileUrl(for: metric.idHash)
-        guard dataPoint.count <= UInt16.max else {
-            logError("Data point too large to store (\(dataPoint.count) bytes)", for: metric.id)
-            return false
-        }
-        let lengthData = UInt16(dataPoint.count).toData()
-        guard exists(url) else {
-            do {
-                try (lengthData + dataPoint).write(to: url)
-            } catch {
-                logError("Failed to create log file: \(error)", for: metric.id)
-                return false
-            }
-            return true
-        }
-
-        let handle: FileHandle
-        do {
-            handle = try FileHandle(forWritingTo: url)
-        } catch {
-            logError("Failed to open log file: \(error)", for: metric.id)
-            return false
-        }
-        defer {
-            try? handle.close()
-        }
-        do {
-            try handle.seekToEnd()
-        } catch {
-            logError("Failed to move to end of log file: \(error)", for: metric.id)
-            return false
-        }
-        do {
-            try handle.write(contentsOf: (lengthData + dataPoint))
-        } catch {
-            logError("Failed to append to log file: \(error)", for: metric.id)
-            return false
-        }
-
-        return true
-    }
-
-    // MARK: Get values
-
-    func getLastValue<T>(for metric: AbstractMetric) -> Timestamped<T>? where T: MetricValue {
-        guard let data = getLastValueData(for: metric) else {
-            return nil
-        }
-
-        do {
-            return try .decode(from: data, using: decoder)
-        } catch {
-            logError("Failed to decode last value: \(error)", for: metric.id)
-            try? fileManager.removeItem(at: lastValueFileUrl(for: metric.idHash))
-            return nil
-        }
-    }
-
-    private func getLastValueData(for metric: AbstractMetric) -> Data? {
-        let lastValueUrl = lastValueFileUrl(for: metric.idHash)
-        guard exists(lastValueUrl) else {
-            // TODO: Read last value from history file?
-            return nil
-        }
-
-        do {
-            return try .init(contentsOf: lastValueUrl)
-        } catch {
-            logError("Failed to read last value: \(error)", for: metric.id)
-            return nil
-        }
-    }
-
-    func getHistoryFromLog(forMetric metric: AbstractMetric, in range: ClosedRange<Date>) throws -> Data {
-        let url = logFileUrl(for: metric.idHash)
-        guard exists(url) else {
-            return Data()
-        }
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            logError("Failed to read log file: \(error)", for: metric.id)
-            return Data()
-        }
-
-        let startTime = range.lowerBound.timeIntervalSince1970
-        let endTime = range.upperBound.timeIntervalSince1970
-
-        var startIndexOfRangeResult = 0
-        var endIndexOfLastElement = 0
-        while endIndexOfLastElement < data.endIndex {
-            let startIndexOfTimestamp = endIndexOfLastElement + byteCountLength
-            guard startIndexOfTimestamp <= data.endIndex else {
-                logError("Insufficient bytes for element byte count: \(data.endIndex - endIndexOfLastElement)", for: metric.id)
-                throw MetricError.logFileCorrupted
-            }
-            guard let byteCount = UInt16(fromData: data[endIndexOfLastElement..<startIndexOfTimestamp]) else {
-                logError("Invalid byte count in log file", for: metric.id)
-                throw MetricError.logFileCorrupted
-            }
-            endIndexOfLastElement = startIndexOfTimestamp + Int(byteCount)
-            guard endIndexOfLastElement <= data.endIndex else {
-                logError("Insufficient bytes for timestamped value: Needed \(byteCountLength + Int(byteCount)), has \(data.endIndex - startIndexOfTimestamp)", for: metric.id)
-                throw MetricError.logFileCorrupted
-            }
-            guard byteCount >= decoder.encodedTimestampLength else {
-                logError("Log element with \(byteCount) bytes is too small to contain a timestamp", for: metric.id)
-                throw MetricError.logFileCorrupted
-            }
-            let timestamp: TimeInterval
-            do {
-                let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+decoder.encodedTimestampLength]
-                timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
-            } catch {
-                logError("Failed to decode timestamp from log file: \(error)", for: metric.id)
-                throw MetricError.logFileCorrupted
-            }
-            if timestamp > endTime {
-                // We assume that the log is sorted, so no more values will be within the interval
-                // after the current element is already after the end date
-                break
-            }
-            if timestamp < startTime {
-                // The current element is outside of the range,
-                // so we move the start index to the start of the next element
-                startIndexOfRangeResult = endIndexOfLastElement
-            }
-        }
-        return data[startIndexOfRangeResult..<endIndexOfLastElement]
-    }
-
-    func getHistoryFromLog<T>(for metric: AbstractMetric, in range: ClosedRange<Date>) throws -> [Timestamped<T>] where T: MetricValue {
-        guard let fileHandle = try logFileHandle(for: metric) else {
-            return []
-        }
-        defer { try? fileHandle.close() }
-
-        // TODO: Skip failing elements in log?
-        var result = [Timestamped<T>]()
-        while let value: Timestamped<T> = try getNextValue(from: fileHandle, for: metric.id) {
-            guard value.timestamp >= range.lowerBound else {
-                continue
-            }
-            guard value.timestamp <= range.upperBound else {
-                break
-            }
-            result.append(value)
-        }
-        return result
-    }
-
-    func getFullHistoryFromLog<T>(for metric: AbstractMetric) throws -> [Timestamped<T>] where T: MetricValue {
-        guard let fileHandle = try logFileHandle(for: metric) else {
-            return []
-        }
-        defer { try? fileHandle.close() }
-
-        // TODO: Option to skip failing elements in log?
-        var result = [Timestamped<T>]()
-        while let value: Timestamped<T> = try getNextValue(from: fileHandle, for: metric.id) {
-            result.append(value)
-        }
-        return result
-    }
-
-    private func logFileHandle(for metric: AbstractMetric) throws -> FileHandle? {
-        let url = logFileUrl(for: metric.idHash)
-        guard exists(url) else {
-            return nil
-        }
-        do {
-            return try FileHandle(forReadingFrom: url)
-        } catch {
-            logError("Failed to read log file: \(error)", for: metric.id)
-            throw MetricError.failedToOpenLogFile
-        }
-    }
-
-    private func getNextValueData(from handle: FileHandle, for metric: MetricId) throws -> (timestamp: Date, data: Data)? {
-        guard let byteCountData = try handle.read(upToCount: byteCountLength) else {
-            return nil
-        }
-        guard let byteCount = UInt16(fromData: byteCountData) else {
-            logError("Error reading log file: Not a valid byte count", for: metric)
-            throw MetricError.logFileCorrupted
-        }
-        guard byteCount >= decoder.encodedTimestampLength else {
-            logError("Error reading log file: Too few bytes (\(byteCount)) for timestamp", for: metric)
-            throw MetricError.logFileCorrupted
-        }
-
-        guard let timestampedValueData = try handle.read(upToCount: Int(byteCount)) else {
-            logError("Error reading log file: No more bytes (needed \(byteCount))", for: metric)
-            throw MetricError.logFileCorrupted
-        }
-        guard timestampedValueData.count == byteCount else {
-            logError("Error reading log file: No more bytes (needed \(byteCount))", for: metric)
-            throw MetricError.logFileCorrupted
-        }
-        let timestamp: Date
-        do {
-            let timestampData = timestampedValueData[0..<decoder.encodedTimestampLength]
-            let timestampValue = try decoder.decode(TimeInterval.self, from: timestampData)
-            timestamp = .init(timeIntervalSince1970: timestampValue)
-        } catch {
-            logError("Invalid timestamp in log file: \(error)", for: metric)
-            throw MetricError.logFileCorrupted
-        }
-        let valueData = timestampedValueData[decoder.encodedTimestampLength...]
-        return (timestamp, valueData)
-    }
-
-    private func getNextValue<T>(from handle: FileHandle, for metric: MetricId) throws -> Timestamped<T>? where T: Decodable {
-        guard let (timestamp, valueData) = try getNextValueData(from: handle, for: metric) else {
-            return nil
-        }
-        do {
-            let value = try decoder.decode(T.self, from: valueData)
-            return .init(timestamp: timestamp, value: value)
-        } catch {
-            logError("Error decoding value from log file: \(error)", for: metric)
-            throw MetricError.logFileCorrupted
-        }
     }
 
     // MARK: Remote observers
@@ -485,7 +156,7 @@ public actor MetricObserver {
         }
     }
 
-    private func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) {
+    func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) {
         guard let observers = remoteObservers[metric.idHash] else {
             return
         }
@@ -510,15 +181,15 @@ public actor MetricObserver {
             request.setValue(remoteObserver.authenticationToken.base64EncodedString(), forHTTPHeaderField: "token")
             let (_, response) = try await urlSessionData(.shared, for: request)
             guard let response = response as? HTTPURLResponse else {
-                logError("Invalid response pushing value to \(remoteUrl.path): \(response)", for: metric.id)
+                log("Invalid response pushing value to \(remoteUrl.path): \(response)", for: metric.id)
                 return
             }
             guard response.statusCode == 200 else {
-                logError("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)", for: metric.id)
+                log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)", for: metric.id)
                 return
             }
         } catch {
-            logError("Failed to push value to \(remoteUrl.path): \(error)", for: metric.id)
+            log("Failed to push value to \(remoteUrl.path): \(error)", for: metric.id)
         }
     }
 
@@ -528,10 +199,22 @@ public actor MetricObserver {
         observedMetrics.values.map { $0.description }
     }
 
-    private func getLastValuesOfAllMetrics() -> [String : Data] {
-        observedMetrics.reduce(into: [:]) { dict, item in
-            dict[item.key] = getLastValueData(for: item.value)
+    private func getDataOfRecordedMetricsList() throws -> Data {
+        let list = getListOfRecordedMetrics()
+        return try encode(list)
+    }
+
+    private func getLastValuesOfAllMetrics() async -> [String : Data] {
+        var result = [String : Data]()
+        for (id, metric) in observedMetrics {
+            result[id] = await metric.lastValueData()
         }
+        return result
+    }
+
+    private func getDataOfLastValuesForAllMetrics() async throws -> Data {
+        let values = await getLastValuesOfAllMetrics()
+        return try encode(values)
     }
 
     private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
@@ -564,8 +247,7 @@ public actor MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            let list = await self.getListOfRecordedMetrics()
-            return try await self.encode(list)
+            return try await self.getDataOfRecordedMetricsList()
         }
 
         app.post(subPath, "last", "all") { [weak self] request in
@@ -574,8 +256,7 @@ public actor MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            let result = await self.getLastValuesOfAllMetrics()
-            return try await self.encode(result)
+            return try await self.getDataOfLastValuesForAllMetrics()
         }
 
         app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
@@ -585,7 +266,7 @@ public actor MetricObserver {
 
             let metric = try await self.getAccessibleMetric(request)
 
-            guard let data = await self.getLastValueData(for: metric) else {
+            guard let data = await metric.lastValueData() else {
                 throw MetricError.noValueAvailable
             }
             return data
@@ -597,8 +278,8 @@ public actor MetricObserver {
             }
 
             let metric = try await self.getAccessibleMetric(request)
-            let range = try request.decodeBody(as: ClosedRange<Date>.self)
-            return try await self.getHistoryFromLog(forMetric: metric, in: range)
+            let range = try request.decodeBody(as: MetricHistoryRequest.self)
+            return await metric.history(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
 
         app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
@@ -616,13 +297,7 @@ public actor MetricObserver {
             }
 
             // Save value for metric
-            guard let success = await metric.update(valueData, decoder: self.decoder) else {
-                // Invalid data will ruin decoding of log files
-                throw Abort(.notAcceptable)
-            }
-            guard success else {
-                throw Abort(.internalServerError)
-            }
+            try await metric.update(valueData)
         }
     }
 }
