@@ -193,11 +193,8 @@ actor LogFileWriter {
             throw MetricError.failedToDecode
         }
     }
-    
-    func write<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
-        guard ensureExistenceOfLogFolder() else {
-            throw MetricError.failedToOpenLogFile
-        }
+
+    func encode<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
         let valueData: Data
         do {
             valueData = try encoder.encode(value.value)
@@ -213,7 +210,15 @@ actor LogFileWriter {
             logError("Failed to encode timestamp: \(error)")
             throw MetricError.failedToEncode
         }
-        let encodedData = timestampedData + valueData
+        return timestampedData + valueData
+    }
+    
+    func write<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
+        guard ensureExistenceOfLogFolder() else {
+            throw MetricError.failedToOpenLogFile
+        }
+
+        let encodedData = try encode(value)
         writeLastValue(encodedData)
 
         let byteCountData = UInt16(encodedData.count).toData()
