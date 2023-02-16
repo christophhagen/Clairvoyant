@@ -212,3 +212,5 @@ Get the logged values of a metric in a specified time interval. The time interva
 - Ensure completeness of log when pulling data from remote metrics
 - Split logs if files get too big
 - Provide values as strings/JSON for web view
+- Implement as backend for [swift-log](https://github.com/apple/swift-log#on-the-implementation-of-a-logging-backend-a-loghandler)
+- Implement as backend for [swift-metrics](https://github.com/apple/swift-metrics#implementing-a-metrics-backend-eg-prometheus-client-library)
