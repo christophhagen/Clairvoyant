@@ -63,7 +63,8 @@ public actor MetricConsumer {
     }
 
     func historyData(for metric: MetricId, in range: ClosedRange<Date>) async throws -> Data {
-        let body = try encode(range)
+        let request = MetricHistoryRequest(range)
+        let body = try encode(request)
         return try await post(path: "history/\(metric.hashed())", body: body)
     }
 
