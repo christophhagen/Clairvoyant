@@ -5,7 +5,7 @@ public actor GenericConsumableMetric {
 
     let consumer: MetricConsumer
 
-    public let description: MetricDescription
+    public nonisolated let description: MetricDescription
 
     public nonisolated var id: MetricId {
         description.id
