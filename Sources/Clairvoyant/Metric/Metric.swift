@@ -73,7 +73,7 @@ public actor Metric<T> where T: MetricValue {
         self.fileWriter = .init(
             id: description.id,
             hash: idHash,
-            folder: observer.logFolder.appendingPathComponent(idHash),
+            folder: observer.logFolder,
             encoder: observer.encoder,
             decoder: observer.decoder)
         Task {

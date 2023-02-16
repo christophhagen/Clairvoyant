@@ -36,10 +36,11 @@ actor LogFileWriter {
     let fileManager: FileManager = .default
     
     init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder) {
+        let metricFolder = folder.appendingPathComponent(hash)
         self.metricId = id
         self.metricIdHash = hash
-        self.folder = folder
-        self.lastValueUrl = folder.appendingPathComponent("last")
+        self.folder = metricFolder
+        self.lastValueUrl = metricFolder.appendingPathComponent("last")
         self.encoder = encoder
         self.decoder = decoder
     }
