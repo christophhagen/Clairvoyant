@@ -13,7 +13,7 @@ public actor Metric<T> where T: MetricValue {
     /**
      The main info about the metric.
      */
-    public let description: MetricDescription
+    public nonisolated let description: MetricDescription
 
     /**
      The name of the file where the metric is logged.
