@@ -3,6 +3,7 @@
 Clairvoyant is a framework to provide monitoring data for Swift servers, targeted at [Vapor](https://vapor.codes). 
 It enables the specification of different metrics to publish over a web API, where it can be collected by monitoring instances.
 
+The framework also allows
 **This repository is in early development**
 
 ## Intention
