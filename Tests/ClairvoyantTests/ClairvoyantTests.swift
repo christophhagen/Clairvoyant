@@ -1,4 +1,5 @@
 import XCTest
+import Vapor
 @testable import Clairvoyant
 import CBORCoding
 
@@ -44,9 +45,9 @@ final class ClairvoyantTests: XCTestCase {
         MetricObserver.standard = nil
     }
 
-    func testCreateObserver() async throws {
+    func testCreateObserver() {
         let authenticator = MyAuthenticator()
-        _ = await MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        _ = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
     }
 
     func testCreateMetricNoObserver() async throws {
@@ -57,26 +58,26 @@ final class ClairvoyantTests: XCTestCase {
         }
     }
 
-    func getIntMetricAndObserver() async throws -> (metric: Metric<Int>, observer: MetricObserver) {
+    func getIntMetricAndObserver() -> (metric: Metric<Int>, observer: MetricObserver) {
         let authenticator = MyAuthenticator()
-        let observer = await MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
-        let metric: Metric<Int> = try await observer.addMetric(id: "myInt")
+        let observer = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        let metric: Metric<Int> = observer.addMetric(id: "myInt")
         return (metric, observer)
     }
 
     func testAddMetricToObserver() async throws {
-        _ = try await getIntMetricAndObserver()
+        _ = getIntMetricAndObserver()
     }
 
     func testCreateMetricBootstrapped() async throws {
         let authenticator = MyAuthenticator()
-        let observer = await MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        let observer = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
         MetricObserver.standard = observer
         _ = try await Metric<Int>("myInt")
     }
 
     func testUpdatingMetric() async throws {
-        let (metric, _) = try await getIntMetricAndObserver()
+        let (metric, _) = getIntMetricAndObserver()
 
         let start = Date()
 
@@ -116,7 +117,7 @@ final class ClairvoyantTests: XCTestCase {
     }
 
     func testClientHistoryDecoding() async throws {
-        let observer = await MetricObserver(logFolder: logFolder, accessManager: MyAuthenticator(), logMetricId: "test.log")
+        let observer = MetricObserver(logFolder: logFolder, accessManager: MyAuthenticator(), logMetricId: "test.log")
         MetricObserver.standard = observer
         let metric = try await Metric<Int>("test.int")
 
@@ -139,7 +140,7 @@ final class ClairvoyantTests: XCTestCase {
     }
 
     func testMultipleLogFiles() async throws {
-        let (metric, _) = try await getIntMetricAndObserver()
+        let (metric, _) = getIntMetricAndObserver()
 
         // 10 MByte per file
         // Around 12 B per entry
@@ -187,11 +188,11 @@ final class ClairvoyantTests: XCTestCase {
     func testLastValue() async throws {
         let value = 123
         do {
-            let (metric, _) = try await getIntMetricAndObserver()
+            let (metric, _) = getIntMetricAndObserver()
             try await metric.update(value)
         }
         do {
-            let (metric, _) = try await getIntMetricAndObserver()
+            let (metric, _) = getIntMetricAndObserver()
             let last = await metric.lastValue()
             XCTAssertNotNil(last)
             if let last {
