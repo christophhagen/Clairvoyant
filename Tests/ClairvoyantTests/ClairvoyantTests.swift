@@ -48,11 +48,13 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testUpdatingMetric() async throws {
-        let (metric, _) = getIntMetricAndObserver()
+        let observer = getIntMetricAndObserver()
+        let metric = observer.metric
 
         let start = Date()
 
-        try await metric.update(1)
+        let stored = try await metric.update(1)
+        XCTAssertTrue(stored)
 
         do {
             guard let lastValue = await metric.lastValue() else {
@@ -62,9 +64,10 @@ final class ClairvoyantTests: SelfCleaningTest {
             XCTAssertEqual(lastValue.value, 1)
         }
 
-        try await metric.update(2)
-
         do {
+            let stored = try await metric.update(2)
+            XCTAssertTrue(stored)
+
             guard let lastValue = await metric.lastValue() else {
                 XCTFail("No last value despite saving one")
                 return
@@ -72,9 +75,10 @@ final class ClairvoyantTests: SelfCleaningTest {
             XCTAssertEqual(lastValue.value, 2)
         }
 
-        try await metric.update(3)
-
         do {
+            let stored = try await metric.update(3)
+            XCTAssertTrue(stored)
+
             guard let lastValue = await metric.lastValue() else {
                 XCTFail("No last value despite saving one")
                 return
@@ -82,7 +86,7 @@ final class ClairvoyantTests: SelfCleaningTest {
             XCTAssertEqual(lastValue.value, 3)
         }
 
-        let range = start...Date()
+        let range = start.addingTimeInterval(-1)...Date()
         let history: [Timestamped<Int>] = await metric.history(in: range)
         XCTAssertEqual(history.map { $0.value }, [1, 2, 3])
     }
@@ -111,7 +115,8 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testMultipleLogFiles() async throws {
-        let (metric, _) = getIntMetricAndObserver()
+        let observer = getIntMetricAndObserver()
+        let metric = observer.metric
 
         // 10 MByte per file
         // Around 12 B per entry
@@ -159,12 +164,12 @@ final class ClairvoyantTests: SelfCleaningTest {
     func testLastValue() async throws {
         let value = 123
         do {
-            let (metric, _) = getIntMetricAndObserver()
-            try await metric.update(value)
+            let observer = getIntMetricAndObserver()
+            try await observer.metric.update(value)
         }
         do {
-            let (metric, _) = getIntMetricAndObserver()
-            let last = await metric.lastValue()
+            let observer = getIntMetricAndObserver()
+            let last = await observer.metric.lastValue()
             XCTAssertNotNil(last)
             if let last {
                 XCTAssertEqual(last.value, value)
