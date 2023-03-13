@@ -34,6 +34,9 @@ public actor Metric<T> where T: MetricValue {
 
     private let fileWriter: LogFileWriter
 
+    /// The unique random id assigned to each observer to distinguish them
+    let uniqueId: Int
+
     /// Indicate if the metric can be updated by a remote user
     public nonisolated var canBeUpdatedByRemote: Bool {
         description.canBeUpdatedByRemote
@@ -69,6 +72,7 @@ public actor Metric<T> where T: MetricValue {
         self.description = description
         let idHash = description.id.hashed()
         self.idHash = idHash
+        self.uniqueId = .random()
         self.observer = observer
         self.fileWriter = .init(
             id: description.id,
@@ -90,6 +94,7 @@ public actor Metric<T> where T: MetricValue {
             description: description)
         let idHash = id.hashed()
         self.idHash = idHash
+        self.uniqueId = .random()
         self.observer = nil
         self.fileWriter = .init(
             id: id,
@@ -121,7 +126,7 @@ public actor Metric<T> where T: MetricValue {
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             name: name,
             description: description)
-        try await observer.observe(self)
+        observer.observe(self)
     }
 
     /**
@@ -133,7 +138,7 @@ public actor Metric<T> where T: MetricValue {
             throw MetricError.noObserver
         }
         self.init(description: description, observer: observer)
-        try await observer.observe(self)
+        observer.observe(self)
     }
 
     func log(_ message: String) {
@@ -141,9 +146,7 @@ public actor Metric<T> where T: MetricValue {
             print("[\(id)] \(message)")
             return
         }
-        Task {
-            await observer.log(message, for: id)
-        }
+        observer.log(message, for: id)
     }
 
     /**
@@ -197,7 +200,7 @@ public actor Metric<T> where T: MetricValue {
         guard let observer else {
             return false
         }
-        await observer.push(self, to: remoteObserver)
+        observer.push(self, to: remoteObserver)
         return true
     }
 

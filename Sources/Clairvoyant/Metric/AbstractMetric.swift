@@ -16,6 +16,8 @@ protocol AbstractMetric: AnyObject {
      */
     var idHash: MetricIdHash { get }
 
+    var uniqueId: Int { get }
+
     var dataType: MetricType { get }
 
     var canBeUpdatedByRemote: Bool { get }

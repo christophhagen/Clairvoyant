@@ -5,7 +5,7 @@ import Vapor
 import FoundationNetworking
 #endif
 
-public actor MetricObserver {
+public final class MetricObserver {
 
     private let hashParameterName = "hash"
 
@@ -65,7 +65,7 @@ public actor MetricObserver {
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
         encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
-        decoder: BinaryDecoder = CBORDecoder()) async {
+        decoder: BinaryDecoder = CBORDecoder()) {
 
             self.uniqueId = .random()
             self.encoder = encoder
@@ -81,7 +81,7 @@ public actor MetricObserver {
                 encoder: encoder,
                 decoder: decoder)
             // No previous metrics, so observing can't fail
-            try! observe(logMetric)
+            observe(logMetric)
     }
 
     // MARK: Adding metrics
@@ -93,19 +93,24 @@ public actor MetricObserver {
      - Parameter description: A textual description of the metric
      - Returns: The created metric.
      */
-    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) async throws -> Metric<T> where T: MetricValue {
+    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) -> Metric<T> where T: MetricValue {
         let metric = Metric<T>(
             id: id,
             observer: self,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             name: name, description: description)
-        try observe(metric)
+        observe(metric)
         return metric
     }
 
-    func observe(_ metric: AbstractMetric) throws {
-        guard observedMetrics[metric.idHash] == nil else {
-            throw MetricError.badMetricId
+    func observe(_ metric: AbstractMetric) {
+        if let old = observedMetrics[metric.idHash], old.uniqueId != metric.uniqueId {
+            // Comparing unique ids prevents potential problem:
+            // When the same metric is registered twice in succession,
+            // then the observer would be removed after the metric is created
+            Task {
+                await old.set(observer: nil)
+            }
         }
         observedMetrics[metric.idHash] = metric
     }
@@ -156,17 +161,14 @@ public actor MetricObserver {
         }
     }
 
-    func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) {
+    func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) async {
         guard let observers = remoteObservers[metric.idHash] else {
             return
         }
-
-        Task {
-            await withTaskGroup(of: Void.self) { group in
-                for observer in observers {
-                    group.addTask {
-                        await self.push(_data: data, for: metric, toRemoteObserver: observer)
-                    }
+        await withTaskGroup(of: Void.self) { group in
+            for observer in observers {
+                group.addTask {
+                    await self.push(_data: data, for: metric, toRemoteObserver: observer)
                 }
             }
         }
@@ -247,7 +249,7 @@ public actor MetricObserver {
             }
 
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            return try await self.getDataOfRecordedMetricsList()
+            return try self.getDataOfRecordedMetricsList()
         }
 
         app.post(subPath, "last", "all") { [weak self] request in
@@ -264,7 +266,7 @@ public actor MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try await self.getAccessibleMetric(request)
+            let metric = try self.getAccessibleMetric(request)
 
             guard let data = await metric.lastValueData() else {
                 throw MetricError.noValueAvailable
@@ -277,7 +279,7 @@ public actor MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try await self.getAccessibleMetric(request)
+            let metric = try self.getAccessibleMetric(request)
             let range = try request.decodeBody(as: MetricHistoryRequest.self)
             return await metric.history(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
@@ -287,7 +289,7 @@ public actor MetricObserver {
                 throw Abort(.internalServerError)
             }
 
-            let metric = try await self.getAccessibleMetric(request)
+            let metric = try self.getAccessibleMetric(request)
             guard metric.canBeUpdatedByRemote else {
                 throw Abort(.expectationFailed)
             }
