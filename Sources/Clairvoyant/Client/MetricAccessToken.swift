@@ -18,4 +18,12 @@ public struct MetricAccessToken: MetricAccessTokenProvider {
     public init(string: String) {
         self.accessToken = string.data(using: .utf8)!
     }
+
+    public var base64: String {
+        accessToken.base64EncodedString()
+    }
+}
+
+extension MetricAccessToken: Hashable {
+    
 }

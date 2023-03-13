@@ -14,11 +14,11 @@ import Vapor
  ```
  struct MyAccessTokenManager: MetricAccessManager {
 
-    func metricListAccess(isAllowedForToken accessToken: AccessToken) throws {
+    func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws {
         ...
     }
 
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: AccessToken) throws {
+    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws {
         ...
     }
  }
@@ -38,7 +38,7 @@ public protocol MetricAccessManager: MetricRequestAccessManager {
      - Parameter token: The access token provided in the request.
      - Throws: `MetricError.accessDenied`
      */
-    func metricListAccess(isAllowedForToken accessToken: AccessToken) throws
+    func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws
 
     /**
      Check if a provided token exists in the token set to allow access.
@@ -46,18 +46,18 @@ public protocol MetricAccessManager: MetricRequestAccessManager {
      - Parameter token: The access token provided in the request.
      - Throws: `MetricError.accessDenied`
      */
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: AccessToken) throws
+    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws
 }
 
 public extension MetricAccessManager {
 
     func metricListAccess(isAllowedForRequest request: Request) throws {
         let accessToken = try request.token()
-        try metricListAccess(isAllowedForToken: accessToken)
+        try metricListAccess(isAllowedForToken: .init(accessToken: accessToken))
     }
 
     func metricAccess(to metric: MetricId, isAllowedForRequest request: Request) throws {
         let accessToken = try request.token()
-        try metricAccess(to: metric, isAllowedForToken: accessToken)
+        try metricAccess(to: metric, isAllowedForToken: .init(accessToken: accessToken))
     }
 }

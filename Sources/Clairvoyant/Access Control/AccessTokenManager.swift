@@ -11,13 +11,13 @@ A very simple access control manager to protect observed metrics.
  */
 public final class AccessTokenManager: MetricAccessManager {
 
-    private var tokens: Set<AccessToken>
+    private var tokens: Set<MetricAccessToken>
 
     /**
      Create a new manager with a set of access tokens.
      - Parameter tokens: The access tokens which should have access to the metrics
      */
-    public init<T>(_ tokens: T) where T: Sequence<AccessToken> {
+    public init<T>(_ tokens: T) where T: Sequence<MetricAccessToken> {
         self.tokens = Set(tokens)
     }
 
@@ -25,7 +25,7 @@ public final class AccessTokenManager: MetricAccessManager {
      Add a new access token.
      - Parameter token: The access token to add.
      */
-    public func add(_ token: AccessToken) {
+    public func add(_ token: MetricAccessToken) {
         tokens.insert(token)
     }
 
@@ -33,7 +33,7 @@ public final class AccessTokenManager: MetricAccessManager {
      Remove an access token.
      - Parameter token: The access token to remove.
      */
-    public func remove(_ token: AccessToken) {
+    public func remove(_ token: MetricAccessToken) {
         tokens.remove(token)
     }
 
@@ -42,7 +42,7 @@ public final class AccessTokenManager: MetricAccessManager {
      - Parameter token: The access token provided in the request.
      - Throws: `MetricError.accessDenied`
      */
-    public func metricListAccess(isAllowedForToken accessToken: AccessToken) throws {
+    public func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws {
         guard tokens.contains(accessToken) else {
             throw MetricError.accessDenied
         }
@@ -54,7 +54,7 @@ public final class AccessTokenManager: MetricAccessManager {
      - Parameter token: The access token provided in the request.
      - Throws: `MetricError.accessDenied`
      */
-    public func metricAccess(to metric: MetricId, isAllowedForToken accessToken: AccessToken) throws {
+    public func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws {
         guard tokens.contains(accessToken) else {
             throw MetricError.accessDenied
         }
