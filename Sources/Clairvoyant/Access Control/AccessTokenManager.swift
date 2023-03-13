@@ -1,3 +1,4 @@
+#if canImport(Vapor)
 import Foundation
 
 /**
@@ -60,3 +61,5 @@ public final class AccessTokenManager: MetricAccessManager {
         }
     }
 }
+
+#endif

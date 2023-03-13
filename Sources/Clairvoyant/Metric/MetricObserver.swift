@@ -1,13 +1,10 @@
 import Foundation
 import CBORCoding
-import Vapor
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 
 public final class MetricObserver {
-
-    private let hashParameterName = "hash"
 
     /**
      The default observer, to which created metrics are added.
@@ -20,7 +17,7 @@ public final class MetricObserver {
     public let logFolder: URL
 
     /// The authentication manager for access to metric information
-    public let accessManager: MetricRequestAccessManager
+    public var accessManager: MetricRequestAccessManager?
 
     /// The encoder used to convert data points to binary data for logging
     let encoder: BinaryEncoder
@@ -60,7 +57,7 @@ public final class MetricObserver {
      */
     public init(
         logFolder: URL,
-        accessManager: MetricRequestAccessManager,
+        accessManager: MetricRequestAccessManager? = nil,
         logMetricId: String,
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
@@ -115,6 +112,10 @@ public final class MetricObserver {
         observedMetrics[metric.idHash] = metric
     }
 
+    public func getMetric<T>(id: String, type: T.Type = T.self) -> Metric<T>? where T: MetricValue {
+        observedMetrics[id.hashed()] as? Metric<T>
+    }
+
     // MARK: Logging
 
     /**
@@ -144,7 +145,7 @@ public final class MetricObserver {
 
     // MARK: Update metric values
 
-    private func getMetric(with idHash: MetricIdHash) throws -> AbstractMetric {
+    func getMetric(with idHash: MetricIdHash) throws -> AbstractMetric {
         guard let metric = observedMetrics[idHash] else {
             throw MetricError.badMetricId
         }
@@ -201,7 +202,7 @@ public final class MetricObserver {
         observedMetrics.values.map { $0.description }
     }
 
-    private func getDataOfRecordedMetricsList() throws -> Data {
+    func getDataOfRecordedMetricsList() throws -> Data {
         let list = getListOfRecordedMetrics()
         return try encode(list)
     }
@@ -214,18 +215,9 @@ public final class MetricObserver {
         return result
     }
 
-    private func getDataOfLastValuesForAllMetrics() async throws -> Data {
+    func getDataOfLastValuesForAllMetrics() async throws -> Data {
         let values = await getLastValuesOfAllMetrics()
         return try encode(values)
-    }
-
-    private func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
-        guard let metricIdHash = request.parameters.get(hashParameterName, as: String.self) else {
-            throw Abort(.badRequest)
-        }
-        let metric = try getMetric(with: metricIdHash)
-        try accessManager.metricAccess(to: metric.id, isAllowedForRequest: request)
-        return metric
     }
 
     private func encode<T>(_ result: T) throws -> Data where T: Encodable {
@@ -234,72 +226,6 @@ public final class MetricObserver {
         } catch {
             log("Failed to encode response: \(error)")
             throw MetricError.failedToEncode
-        }
-    }
-
-    /**
-     Register the routes to access the properties.
-     - Parameter subPath: The server route subpath where the properties can be accessed
-     */
-    public func registerRoutes(_ app: Application, subPath: String = "metrics") {
-
-        app.post(subPath, "list") { [weak self] request async throws in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            return try self.getDataOfRecordedMetricsList()
-        }
-
-        app.post(subPath, "last", "all") { [weak self] request in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            try self.accessManager.metricListAccess(isAllowedForRequest: request)
-            return try await self.getDataOfLastValuesForAllMetrics()
-        }
-
-        app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            let metric = try self.getAccessibleMetric(request)
-
-            guard let data = await metric.lastValueData() else {
-                throw MetricError.noValueAvailable
-            }
-            return data
-        }
-
-        app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            let metric = try self.getAccessibleMetric(request)
-            let range = try request.decodeBody(as: MetricHistoryRequest.self)
-            return await metric.history(from: range.start, to: range.end, maximumValueCount: range.limit)
-        }
-
-        app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
-            guard let self else {
-                throw Abort(.internalServerError)
-            }
-
-            let metric = try self.getAccessibleMetric(request)
-            guard metric.canBeUpdatedByRemote else {
-                throw Abort(.expectationFailed)
-            }
-
-            guard let valueData = request.body.data?.all() else {
-                throw Abort(.badRequest)
-            }
-
-            // Save value for metric
-            try await metric.update(valueData)
         }
     }
 }

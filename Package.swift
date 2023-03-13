@@ -20,14 +20,13 @@ let package = Package(
             name: "Clairvoyant",
             dependencies: [
                 .product(name: "CBORCoding", package: "CBORCoding"),
-                .product(name: "Vapor", package: "vapor"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ]),
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
-                "Clairvoyant",
                 .product(name: "Vapor", package: "vapor"),
+                "Clairvoyant",
             ]),
     ]
 )

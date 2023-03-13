@@ -1,5 +1,4 @@
 import Foundation
-import Vapor
 
 /**
  A protocol that can be implemented to control access to metrics via binary access tokens.
@@ -49,6 +48,9 @@ public protocol MetricAccessManager: MetricRequestAccessManager {
     func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws
 }
 
+#if canImport(Vapor)
+import Vapor
+
 public extension MetricAccessManager {
 
     func metricListAccess(isAllowedForRequest request: Request) throws {
@@ -61,3 +63,4 @@ public extension MetricAccessManager {
         try metricAccess(to: metric, isAllowedForToken: .init(accessToken: accessToken))
     }
 }
+#endif
