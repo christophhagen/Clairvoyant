@@ -190,9 +190,7 @@ public actor Metric<T> where T: MetricValue {
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
     public func fullHistory() async -> [Timestamped<T>] {
-        let start = Date(timeIntervalSince1970: 0)
-        let end = Date()
-        return await history(in: start...end)
+        await fileWriter.getFullHistory()
     }
 
     @discardableResult
@@ -208,27 +206,36 @@ public actor Metric<T> where T: MetricValue {
      Update the value of the metric.
 
      This function will create a new timestamped value and forward it for logging.
+
+     - Note: The value is only written to the log, if it is different to the previous one.
      - Parameter value: The new value to set.
      - Parameter timestamp: The timestamp of the value (defaults to the current time)
+     - Returns: `true`, if the value was written, `false`, if it was equal to the last value.
+     - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
-    public func update(_ value: T, timestamp: Date = Date()) async throws {
-        if let lastValue = await lastValue()?.value, lastValue == value {
-            return
-        }
-        let dataPoint = Timestamped(timestamp: timestamp, value: value)
-        try await update(dataPoint)
+    @discardableResult
+    public func update(_ value: T, timestamp: Date = Date()) async throws -> Bool {
+        try await update(.init(timestamp: timestamp, value: value))
     }
 
     /**
      Update the value of the metric.
 
      This function will create a new timestamped value and forward it for logging.
+     - Note: The value is only written to the log, if it is different to the previous one.
      - Parameter value: The timestamped value to set
+     - Returns: `true`, if the value was written, `false`, if it was equal to the last value.
+     - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
-    public func update(_ value: Timestamped<T>) async throws {
+    @discardableResult
+    public func update(_ value: Timestamped<T>) async throws -> Bool {
+        if let lastValue = await lastValue()?.value, lastValue == value.value {
+            return false
+        }
         let data = try await fileWriter.write(value)
         _lastValue = value
         await observer?.pushValueToRemoteObservers(data, for: self)
+        return true
     }
 }
 

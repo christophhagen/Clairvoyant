@@ -16,6 +16,7 @@ actor LogFileWriter {
     
     let metricIdHash: MetricIdHash
 
+    /// The reference to the metric for error logging.
     private weak var metric: AbstractMetric?
     
     private let encoder: BinaryEncoder
@@ -49,6 +50,9 @@ actor LogFileWriter {
         try? handle?.close()
     }
 
+    /**
+     Set the reference to the metric for error handling.
+     */
     func set(metric: AbstractMetric) {
         self.metric = metric
     }
@@ -93,6 +97,7 @@ actor LogFileWriter {
     /**
      Get the file handle to write a value.
      - Parameter date: The date of the value, if a new log file must be created
+     - Throws: `failedToOpenLogFile`
      */
     private func getFileHandle(date: Date) throws -> FileHandle {
         if let handle {
@@ -131,6 +136,9 @@ actor LogFileWriter {
     }
     
     private func getAllLogFilesWithDates() -> [(url: URL, date: Date)] {
+        guard exists(folder) else {
+            return []
+        }
         do {
             return try fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
                 .compactMap {
@@ -154,11 +162,29 @@ actor LogFileWriter {
             return (url, start...end)
         }
     }
+
+    private func getAllLogFiles() -> [URL] {
+        guard exists(folder) else {
+            return []
+        }
+        do {
+            return try fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+                .filter { Int($0.lastPathComponent) != nil }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        } catch {
+            logError("Failed to get list of files: \(error)")
+            return []
+        }
+    }
+
     
     private func findLatestFile() -> URL? {
         getAllLogFilesWithDates().last?.url
     }
-    
+
+    /**
+     - Throws: `failedToOpenLogFile`
+     */
     private func createAndOpenFile(with date: Date) throws -> FileHandle {
         let url = url(for: date)
         do {
@@ -194,6 +220,9 @@ actor LogFileWriter {
         }
     }
 
+    /**
+     - Throws:`failedToEncode`
+     */
     func encode<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
         let valueData: Data
         do {
@@ -212,7 +241,10 @@ actor LogFileWriter {
         }
         return timestampedData + valueData
     }
-    
+
+    /**
+     - Throws: `failedToOpenLogFile`, `failedToEncode`
+     */
     func write<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
         guard ensureExistenceOfLogFolder() else {
             throw MetricError.failedToOpenLogFile
@@ -225,7 +257,10 @@ actor LogFileWriter {
         try writeToLog(data: byteCountData + encodedData, date: value.timestamp)
         return encodedData
     }
-    
+
+    /**
+     - Throws: `failedToOpenLogFile`
+     */
     private func writeToLog(data: Data, date: Date) throws {
         let handle = try getFileHandle(date: date)
         
@@ -302,6 +337,10 @@ actor LogFileWriter {
         }
         return result
     }
+
+    func getFullHistory<T>(maximumValueCount: Int? = nil) -> [Timestamped<T>] where T: Decodable {
+       getAllLogFiles().map { decode(T.self, from: $0) }.joined().map { $0 }
+    }
     
     func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) -> Data {
         let result = getHistoryData(startingFrom: start, upTo: end, maximumValueCount: maximumValueCount)
@@ -363,7 +402,6 @@ actor LogFileWriter {
         }
         let data: Data
         do {
-            print("Reading file \(url.lastPathComponent)")
             data = try Data(contentsOf: url)
         } catch {
             logError("File \(url.lastPathComponent): Failed to read: \(error)")
