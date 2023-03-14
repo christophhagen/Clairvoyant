@@ -3,7 +3,8 @@
 Clairvoyant is a framework to provide monitoring data for Swift servers, targeted at [Vapor](https://vapor.codes). 
 It enables the specification of different metrics to publish over a web API, where it can be collected by monitoring instances.
 
-The framework also allows
+The framework can also be used as a logging backend for [swift-log](https://github.com/apple/swift-log), so that log contents can be made available conveniently over a web api (see [logging backend](#usage-with-swift-log)).
+
 **This repository is in early development**
 
 ## Intention
@@ -12,7 +13,7 @@ This framework intends to provide a very lightweight logging and monitoring poss
 It allows publishing, collecting, and logging time-series data in a very simple way.
 The goal is to provide easy remote access to basic information about running services, as well as provide history data.
 
-It is maybe similiar to approaches like [swift-metrics](https://github.com/apple/swift-metrics), but without running a cumbersome momnitoring backend.
+It is maybe similiar to approaches like [swift-metrics](https://github.com/apple/swift-metrics), but without running a cumbersome monitoring backend.
 
 ## Usage
 
@@ -193,6 +194,32 @@ Get the logged values of a metric in a specified time interval. The time interva
 ### Complex types
 
 **To Be Documented**
+
+## Usage with `swift-log`
+
+Clairvoyant can be used as a logging backend for `swift-log`, so that all logs are made available as `String` metrics.
+To forward logs as metrics, simply set an observer as the backend:
+
+```swift
+let observer = MetricObserver(...)
+LoggingSystem.bootstrap(observer.loggingBackend)
+```
+
+Each logging entry will then be timestamped and added to a metric with the same `ID` as the logger `label`.
+
+```swift
+let logger = Logger(label: "my.log")
+logger.info("It works!")
+```
+
+The logging metrics are made available over the API in the same way as other metrics, and can also be accessed directly.
+
+```swift
+let metric = observer.getMetric(id: "my.log", type: String.self)
+```
+
+It's possible to change the logging format by setting the `loggingFormat` property on the observer before creating a logger.
+The property applies to each new logger, but changes are not propagated to existing ones.
 
 ## Initial requirements
 
