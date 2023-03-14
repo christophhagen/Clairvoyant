@@ -9,3 +9,10 @@ public protocol BinaryDecoder {
 
     var encodedTimestampLength: Int { get }
 }
+
+public extension BinaryDecoder {
+
+    func decode<T>(from data: Data) throws -> T where T: Decodable {
+        try decode(T.self, from: data)
+    }
+}

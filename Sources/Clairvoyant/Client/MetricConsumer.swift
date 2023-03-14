@@ -40,7 +40,7 @@ public actor MetricConsumer {
     }
 
     public func metric(from description: MetricDescription) -> GenericConsumableMetric {
-        .init(consumer: self, description: description)
+        .init(consumer: self, description: description, decoder: decoder)
     }
 
     func lastValueData(for metric: MetricId) async throws -> Data? {

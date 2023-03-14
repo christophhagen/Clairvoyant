@@ -1,5 +1,4 @@
 import Foundation
-import CBORCoding
 
 public actor GenericConsumableMetric {
 
@@ -21,15 +20,18 @@ public actor GenericConsumableMetric {
 
     private let timestampLength = 9
 
-    private let decoder = CBORDecoder()
+    private let decoder: BinaryDecoder
 
-    init(consumer: MetricConsumer, id: MetricId, dataType: MetricType, name: String? = nil, description: String? = nil) {
+    init(consumer: MetricConsumer, id: MetricId, dataType: MetricType, name: String? = nil, description: String? = nil, decoder: BinaryDecoder) {
         self.consumer = consumer
         self.description = .init(id: id, dataType: dataType, name: name, description: description)
+        self.decoder = decoder
     }
-    init(consumer: MetricConsumer, description: MetricDescription) {
+
+    init(consumer: MetricConsumer, description: MetricDescription, decoder: BinaryDecoder) {
         self.consumer = consumer
         self.description = description
+        self.decoder = decoder
     }
 
     public func lastValueData() async throws -> (data: Data, timestamp: Date)? {
