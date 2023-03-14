@@ -50,7 +50,7 @@ final class VaporTests: SelfCleaningTest {
                 XCTFail()
                 return
             }
-            let decoded = try Timestamped<String>.decode(from: data, using: decoder)
+            let decoded: Timestamped<String> = try decoder.decode(from: data)
             XCTAssertEqual(decoded.value, "test")
         })
     }
@@ -98,8 +98,9 @@ final class VaporTests: SelfCleaningTest {
 
             XCTAssertEqual(res.status, .ok)
             let body = Data(res.body.readableBytesView)
-            let result = try Timestamped<String>.decode(from: body, using: decoder)
-            XCTAssertEqual(result.value, "test")
+            let result = try decoder.decode([Timestamped<String>].self, from: body)
+            XCTAssertEqual(result.count, 1)
+            XCTAssertEqual(result.first?.value, "test")
         })
     }
 }

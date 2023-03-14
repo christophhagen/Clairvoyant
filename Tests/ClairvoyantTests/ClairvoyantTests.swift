@@ -90,13 +90,14 @@ final class ClairvoyantTests: SelfCleaningTest {
 
         let end = Date()
         let data = await metric.history(from: start, to: end)
+        let decoder = CBORDecoder()
 
         let client = MetricConsumer(url: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))
-        let values: [Int] = try await client.decode(logData: data).map { $0.value }
+        let values: [Int] = try decoder.decode([Timestamped<Int>].self, from: data).map { $0.value }
         XCTAssertEqual(values, input)
 
         let generic = await client.metric(from: metric.description)
-        let genericValues = try await generic.decode(data, type: Int.self).map { $0.description }
+        let genericValues = try await generic.decodeTimestampedArray(data, type: Int.self).map { $0.description }
         XCTAssertEqual(genericValues, input.map { "\($0)"})
     }
 

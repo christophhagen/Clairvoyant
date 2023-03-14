@@ -70,7 +70,7 @@ public actor MetricConsumer {
 
     public func history<T>(for metric: MetricId, in range: ClosedRange<Date>, type: T.Type = T.self) async throws -> [Timestamped<T>] where T: MetricValue {
         let data = try await historyData(for: metric, in: range)
-        return try decode(logData: data)
+        return try decode(from: data)
     }
 
     private func post(path: String, body: Data? = nil) async throws -> Data {
@@ -112,52 +112,5 @@ public actor MetricConsumer {
         } catch {
             throw MetricError.failedToEncode
         }
-    }
-
-    func decode<T>(logData data: Data) throws -> [Timestamped<T>] where T: MetricValue {
-        try decode(logData: data).map {
-            do {
-                let value = try decoder.decode(T.self, from: $0.data)
-                return .init(timestamp: $0.timestamp, value: value)
-            } catch {
-                throw MetricError.failedToDecode
-            }
-        }
-    }
-
-    func decode(logData data: Data) throws -> [(timestamp: Date, data: Data)] {
-        var result = [(timestamp: Date, data: Data)]()
-        var index = data.startIndex
-        while index < data.endIndex {
-            guard index + 2 <= data.endIndex else {
-                throw MetricError.failedToDecode
-            }
-            let byteCountData = data[index..<index+2]
-            guard let byteCountRaw = UInt16(fromData: byteCountData) else {
-                throw MetricError.failedToDecode
-            }
-            let byteCount = Int(byteCountRaw)
-            index += 2
-            guard index + byteCount <= data.endIndex else {
-                throw MetricError.failedToDecode
-            }
-
-            guard byteCount >= decoder.encodedTimestampLength else {
-                throw MetricError.failedToDecode
-            }
-            let timestamp: Date
-            do {
-                let timestampData = data[index..<index+decoder.encodedTimestampLength]
-                let timestampInterval = try decoder.decode(TimeInterval.self, from: timestampData)
-                timestamp = .init(timeIntervalSince1970: timestampInterval)
-            } catch {
-                throw MetricError.logFileCorrupted
-            }
-
-            let valueData = data[index+decoder.encodedTimestampLength..<index+byteCount]
-            index += byteCount
-            result.append((timestamp, valueData))
-        }
-        return result
     }
 }

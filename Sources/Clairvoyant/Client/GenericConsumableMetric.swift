@@ -34,14 +34,11 @@ public actor GenericConsumableMetric {
         self.decoder = decoder
     }
 
-    public func lastValueData() async throws -> (data: Data, timestamp: Date)? {
+    public func lastValueData() async throws -> Data? {
         guard let data = try await consumer.lastValueData(for: id) else {
             return nil
         }
-        guard let (date, remaining) = decodeTimestamp(from: data) else {
-            return nil
-        }
-        return (remaining, date)
+        return data
     }
 
     public func lastValue() async throws -> (description: String, timestamp: Date)? {
@@ -66,79 +63,75 @@ public actor GenericConsumableMetric {
         let data = try await consumer.historyData(for: id, in: range)
         switch dataType {
         case .integer:
-            return try await decode(data, type: Int.self)
+            return try decodeTimestampedArray(data, type: Int.self)
         case .double:
-            return try await decode(data, type: Double.self)
+            return try decodeTimestampedArray(data, type: Double.self)
         case .boolean:
-            return try await decode(data, type: Bool.self)
+            return try decodeTimestampedArray(data, type: Bool.self)
         case .string:
-            return try await decode(data, type: String.self)
+            return try decodeTimestampedArray(data, type: String.self)
         case .data:
-            return try await decode(data, type: Data.self)
+            return try decodeTimestampedArray(data, type: Data.self)
         case .enumeration:
-            return try await consumer.decode(logData: data).map { element in
-                let value: UInt8 = try decoder.decode(from: element.data)
-                return (description: "Enum(\(value))", timestamp: element.timestamp)
+            return try decodeTimestampedArray(data, type: UInt8.self).map { element in
+                return (description: "Enum(\(element.description))", timestamp: element.timestamp)
             }
-        case .customType:
-            return try await consumer.decode(logData: data).map { ("\($0.data)", $0.timestamp) }
+        case .customType(let name):
+            return try decoder.decode([AnyTimestamped].self, from: data).map { element in
+                (description: name, timestamp: element.timestamp)
+            }
         case .serverStatus:
-            return try await decode(data, type: ServerStatus.self)
+            return try decodeTimestampedArray(data, type: ServerStatus.self)
         }
     }
 
-    func decode<T>(_ data: Data, type: T.Type = T.self) async throws -> [(description: String, timestamp: Date)] where T: Decodable {
-        try await consumer.decode(logData: data).map { element in
-            let value: T = try decoder.decode(from: element.data)
-            return (description: "\(value)", timestamp: element.timestamp)
+    func decodeTimestampedArray<T>(_ data: Data, type: T.Type = T.self) throws -> [(description: String, timestamp: Date)] where T: Decodable {
+        try decoder.decode([Timestamped<T>].self, from: data).map { element in
+            (description: "\(element.value)", timestamp: element.timestamp)
         }
     }
 
     private func describe(_ data: Data, type: MetricType) -> (description: String, timestamp: Date) {
         switch type {
         case .integer:
-            return decode(Int.self, from: data)
+            return decodeTimestamped(Int.self, from: data)
         case .double:
-            return decode(Double.self, from: data)
+            return decodeTimestamped(Double.self, from: data)
         case .boolean:
-            return decode(Bool.self, from: data)
+            return decodeTimestamped(Bool.self, from: data)
         case .string:
-            return decode(String.self, from: data)
+            return decodeTimestamped(String.self, from: data)
         case .enumeration:
-            let a = decode(UInt8.self, from: data)
-            return ("Enum(\(a.description))", a.timestamp)
+            let value = decodeTimestamped(UInt8.self, from: data)
+            return ("Enum(\(value.description))", value.timestamp)
         case .customType(let name):
-            return (name, Date())
+            guard let value: AnyTimestamped = try? decode(from: data) else {
+                return ("Decoding error", Date())
+            }
+            return (name, value.timestamp)
         case .data:
-            return decode(Data.self, from: data)
+            return decodeTimestamped(Data.self, from: data)
         case .serverStatus:
-            return decode(ServerStatus.self, from: data)
+            return decodeTimestamped(ServerStatus.self, from: data)
         }
     }
 
-    private func decodeTimestamp(from data: Data) -> (timestamp: Date, remaining: Data)? {
+    private func decodeTimestamped<T>(_ type: T.Type, from data: Data) -> (description: String, timestamp: Date) where T: Codable {
         do {
-            let timestampData = data.prefix(timestampLength)
-            let timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
-            return (Date(timeIntervalSince1970: timestamp), data.advanced(by: timestampLength))
-
-        } catch {
-            print("Failed to decode timestamp of last value: \(error)")
-            return nil
-        }
-    }
-
-    private func decode<T>(_ type: T.Type, from data: Data) -> (description: String, timestamp: Date) where T: Codable {
-        guard let (date, remaining) = decodeTimestamp(from: data) else {
-            return ("Invalid timestamp", Date())
-        }
-
-        do {
-            let value: T = try decoder.decode(from: remaining)
-            return ("\(value)", date)
+            let value: Timestamped<T> = try decoder.decode(from: data)
+            return ("\(value)", value.timestamp)
         } catch {
             print("Failed to decode last value: \(error)")
-            return ("Decoding error", date)
+            return ("Decoding error", Date())
+        }
+    }
+
+    private func decode<T>(from data: Data) throws -> T where T : Decodable {
+        do {
+            return try decoder.decode(from: data)
+        } catch {
+            print("Failed to decode \(data): \(error)")
+            throw error
         }
     }
 }
