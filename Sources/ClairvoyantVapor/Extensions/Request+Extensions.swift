@@ -1,7 +1,5 @@
 import Foundation
 import CBORCoding
-
-#if canImport(Vapor)
 import Vapor
 
 private let decoder = CBORDecoder()
@@ -29,5 +27,3 @@ extension Request {
         }
     }
 }
-
-#endif

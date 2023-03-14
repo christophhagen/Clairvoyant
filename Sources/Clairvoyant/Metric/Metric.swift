@@ -34,7 +34,7 @@ public actor Metric<T> where T: MetricValue {
 
     private let fileWriter: LogFileWriter
 
-    /// The unique random id assigned to each observer to distinguish them
+    /// The unique random id assigned to each metric to distinguish them
     let uniqueId: Int
 
     /// Indicate if the metric can be updated by a remote user
@@ -163,17 +163,6 @@ public actor Metric<T> where T: MetricValue {
         return await fileWriter.lastValue()
     }
 
-    func lastValueData() async -> Data? {
-        if let _lastValue {
-            return try? await fileWriter.encode(_lastValue)
-        }
-        return await fileWriter.lastValueData()
-    }
-
-    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
-        await fileWriter.getHistoryData(startingFrom: startDate, upTo: endDate, maximumValueCount: maximumValueCount)
-    }
-
     /**
      Get the history of the metric values within a time period.
      - Parameter range: The date range of interest
@@ -253,9 +242,23 @@ extension Metric: AbstractMetric {
     func set(observer: MetricObserver?) {
         self.observer = observer
     }
+}
 
-    func update(_ dataPoint: TimestampedValueData) async throws {
+extension Metric: GenericMetric {
+
+    public func lastValueData() async -> Data? {
+        if let _lastValue {
+            return try? await fileWriter.encode(_lastValue)
+        }
+        return await fileWriter.lastValueData()
+    }
+
+    public func update(_ dataPoint: Data) async throws {
         let value: Timestamped<T> = try await fileWriter.decode(dataPoint)
         try await update(value)
+    }
+
+    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
+        await fileWriter.getHistoryData(startingFrom: startDate, upTo: endDate, maximumValueCount: maximumValueCount)
     }
 }

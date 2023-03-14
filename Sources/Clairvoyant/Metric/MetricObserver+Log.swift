@@ -65,12 +65,12 @@ struct MetricLogHandler: LogHandler {
             let text: String
             switch format {
             case .full:
-                text = "[\(level)][\(source):\(file):\(function):\(line)] \(message)"
+                text = "[\(level.text)][\(source):\(file):\(function):\(line)] \(message)"
             case .medium:
                 let f = file.components(separatedBy: "/").last!
-                text = "[\(level)][\(f):\(function):\(line)] \(message)"
+                text = "[\(level.text)][\(f):\(function):\(line)] \(message)"
             case .basic:
-                text = "[\(level)] \(message)"
+                text = "[\(level.text)] \(message)"
             case .message:
                 text = message.description
             }
@@ -96,9 +96,9 @@ struct MetricLogHandler: LogHandler {
     }
 }
 
-extension Logger.Level: CustomStringConvertible {
+private extension Logger.Level {
 
-    public var description: String {
+    var text: String {
         switch self {
         case .trace:
             return "TRACE"
@@ -117,5 +117,4 @@ extension Logger.Level: CustomStringConvertible {
         }
     }
 }
-
 #endif

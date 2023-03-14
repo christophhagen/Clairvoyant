@@ -3,22 +3,10 @@ import Vapor
 @testable import Clairvoyant
 import CBORCoding
 
-final class MyAuthenticator: MetricAccessManager {
-    
-    func metricListAccess(isAllowedForToken accessToken: MetricAccessToken) throws {
-
-    }
-
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: MetricAccessToken) throws {
-
-    }
-}
-
 final class ClairvoyantTests: SelfCleaningTest {
 
     func testCreateObserver() {
-        let authenticator = MyAuthenticator()
-        _ = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        _ = MetricObserver(logFolder: logFolder, logMetricId: "log")
     }
 
     func testCreateMetricNoObserver() async throws {
@@ -30,8 +18,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func getIntMetricAndObserver() -> (metric: Metric<Int>, observer: MetricObserver) {
-        let authenticator = MyAuthenticator()
-        let observer = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        let observer = MetricObserver(logFolder: logFolder, logMetricId: "log")
         let metric: Metric<Int> = observer.addMetric(id: "myInt")
         return (metric, observer)
     }
@@ -41,8 +28,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testCreateMetricBootstrapped() async throws {
-        let authenticator = MyAuthenticator()
-        let observer = MetricObserver(logFolder: logFolder, accessManager: authenticator, logMetricId: "log")
+        let observer = MetricObserver(logFolder: logFolder, logMetricId: "log")
         MetricObserver.standard = observer
         _ = try await Metric<Int>("myInt")
     }
@@ -92,7 +78,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testClientHistoryDecoding() async throws {
-        let observer = MetricObserver(logFolder: logFolder, accessManager: MyAuthenticator(), logMetricId: "test.log")
+        let observer = MetricObserver(logFolder: logFolder, logMetricId: "test.log")
         MetricObserver.standard = observer
         let metric = try await Metric<Int>("test.int")
 

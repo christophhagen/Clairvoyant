@@ -1,6 +1,6 @@
 import Foundation
 
-protocol AbstractMetric: AnyObject {
+protocol AbstractMetric: AnyObject, GenericMetric {
 
     /**
      The description of the metric.
@@ -20,29 +20,9 @@ protocol AbstractMetric: AnyObject {
 
     var dataType: MetricType { get }
 
-    var canBeUpdatedByRemote: Bool { get }
-
     func getObserver() async -> MetricObserver?
 
     func set(observer: MetricObserver?) async
 
-    func update(_ dataPoint: TimestampedValueData) async throws
-
-    func lastValueData() async -> Data?
-
-    func history(from startDate: Date, to endDate: Date, maximumValueCount: Int?) async -> Data
-
     func log(_ message: String) async
-}
-
-extension AbstractMetric {
-
-    /**
-     The unique id of the metric.
-
-     The id should be globally unique, so that there are no conflicts when metrics from multiple systems are collected
-     */
-    var id: MetricId {
-        description.id
-    }
 }

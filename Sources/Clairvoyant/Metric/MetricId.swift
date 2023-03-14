@@ -2,7 +2,7 @@ import Foundation
 import Crypto
 
 public typealias MetricId = String
-typealias MetricIdHash = String
+public typealias MetricIdHash = String
 
 extension MetricId {
 

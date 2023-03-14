@@ -1,7 +1,7 @@
 import Foundation
 import CBORCoding
-#if canImport(Vapor)
 import Vapor
+import Clairvoyant
 
 extension Application {
 
@@ -31,5 +31,3 @@ extension Application {
         }
     }
 }
-
-#endif

@@ -16,11 +16,8 @@ public final class MetricObserver {
     /// The directory where the log files and other internal data is to be stored.
     public let logFolder: URL
 
-    /// The authentication manager for access to metric information
-    public var accessManager: MetricRequestAccessManager?
-
     /// The encoder used to convert data points to binary data for logging
-    let encoder: BinaryEncoder
+    public let encoder: BinaryEncoder
 
     /// The decoder used to decode log entries when providing history data
     let decoder: BinaryDecoder
@@ -52,12 +49,10 @@ public final class MetricObserver {
      It is also possible to write to this metric using ``log(_:)``.
 
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
-     - Parameter accessManager: The handler of authentication to access metric data
      - Parameter logMetricId: The id of the metric for internal log data
      */
     public init(
         logFolder: URL,
-        accessManager: MetricRequestAccessManager? = nil,
         logMetricId: String,
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
@@ -68,7 +63,6 @@ public final class MetricObserver {
             self.encoder = encoder
             self.decoder = decoder
             self.logFolder = logFolder
-            self.accessManager = accessManager
             self.logMetric = .init(
                 unobserved: logMetricId,
                 name: logMetricName,
@@ -145,7 +139,7 @@ public final class MetricObserver {
 
     // MARK: Update metric values
 
-    func getMetric(with idHash: MetricIdHash) throws -> AbstractMetric {
+    public func getMetricByHash(_ idHash: MetricIdHash) throws -> GenericMetric {
         guard let metric = observedMetrics[idHash] else {
             throw MetricError.badMetricId
         }
@@ -198,35 +192,16 @@ public final class MetricObserver {
 
     // MARK: Routes
 
-    func getListOfRecordedMetrics() -> [MetricDescription] {
+    public func getListOfRecordedMetrics() -> [MetricDescription] {
         observedMetrics.values.map { $0.description }
     }
 
-    func getDataOfRecordedMetricsList() throws -> Data {
-        let list = getListOfRecordedMetrics()
-        return try encode(list)
-    }
-
-    private func getLastValuesOfAllMetrics() async -> [String : Data] {
+    public func getLastValuesOfAllMetrics() async -> [String : Data] {
         var result = [String : Data]()
         for (id, metric) in observedMetrics {
             result[id] = await metric.lastValueData()
         }
         return result
-    }
-
-    func getDataOfLastValuesForAllMetrics() async throws -> Data {
-        let values = await getLastValuesOfAllMetrics()
-        return try encode(values)
-    }
-
-    private func encode<T>(_ result: T) throws -> Data where T: Encodable {
-        do {
-            return try encoder.encode(result)
-        } catch {
-            log("Failed to encode response: \(error)")
-            throw MetricError.failedToEncode
-        }
     }
 
 #if canImport(Logging)

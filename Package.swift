@@ -23,12 +23,18 @@ let package = Package(
                 .product(name: "CBORCoding", package: "CBORCoding"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ]),
+        .target(
+            name: "ClairvoyantVapor",
+            dependencies: [
+                .target(name: "Clairvoyant"),
+                .product(name: "Vapor", package: "vapor"),
+            ]),
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
-                .product(name: "Vapor", package: "vapor"),
                 .product(name: "Logging", package: "swift-log"),
                 "Clairvoyant",
+                "ClairvoyantVapor",
             ]),
     ]
 )

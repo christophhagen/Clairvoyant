@@ -1,22 +1,53 @@
-#if canImport(Vapor)
 import Foundation
 import Vapor
+import Clairvoyant
 
-extension MetricObserver {
+public final class VaporMetricProvider {
 
-    private static let hashParameterName = "hash"
+    private let hashParameterName = "hash"
 
-    private var hashParameterName: String {
-        MetricObserver.hashParameterName
+    /// The authentication manager for access to metric information
+    public let accessManager: MetricRequestAccessManager
+
+    public let observer: MetricObserver
+
+    public let encoder: BinaryEncoder
+
+    /**
+     - Parameter accessManager: The handler of authentication to access metric data
+     */
+    public init(observer: MetricObserver, accessManager: MetricRequestAccessManager, encoder: BinaryEncoder? = nil) {
+        self.accessManager = accessManager
+        self.observer = observer
+        self.encoder = encoder ?? observer.encoder
     }
 
-    func getAccessibleMetric(_ request: Request) throws -> AbstractMetric {
+    func getAccessibleMetric(_ request: Request) throws -> GenericMetric {
         guard let metricIdHash = request.parameters.get(hashParameterName, as: String.self) else {
             throw Abort(.badRequest)
         }
-        let metric = try getMetric(with: metricIdHash)
+        let metric = try observer.getMetricByHash(metricIdHash)
         try accessManager.metricAccess(to: metric.id, isAllowedForRequest: request)
         return metric
+    }
+
+    private func getDataOfRecordedMetricsList() throws -> Data {
+        let list = observer.getListOfRecordedMetrics()
+        return try encode(list)
+    }
+
+    private func getDataOfLastValuesForAllMetrics() async throws -> Data {
+        let values = await observer.getLastValuesOfAllMetrics()
+        return try encode(values)
+    }
+
+    private func encode<T>(_ result: T) throws -> Data where T: Encodable {
+        do {
+            return try encoder.encode(result)
+        } catch {
+            observer.log("Failed to encode response: \(error)")
+            throw MetricError.failedToEncode
+        }
     }
 
     /**
@@ -56,7 +87,7 @@ extension MetricObserver {
             return data
         }
 
-        app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request in
+        app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
             }
@@ -85,5 +116,3 @@ extension MetricObserver {
         }
     }
 }
-
-#endif

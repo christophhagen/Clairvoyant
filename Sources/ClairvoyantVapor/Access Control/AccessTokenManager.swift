@@ -1,5 +1,5 @@
-#if canImport(Vapor)
 import Foundation
+import Clairvoyant
 
 /**
 A very simple access control manager to protect observed metrics.
@@ -61,5 +61,3 @@ public final class AccessTokenManager: MetricAccessManager {
         }
     }
 }
-
-#endif
