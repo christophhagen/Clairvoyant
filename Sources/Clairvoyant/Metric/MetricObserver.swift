@@ -203,20 +203,6 @@ public final class MetricObserver {
         }
         return result
     }
-
-#if canImport(Logging)
-
-    /**
-     The logging format to use when using the observer as a logging backend.
-
-     The format determines the detail with which log messages are converted to text when being stored in a metric.
-     The logging format is applied to any new `Logger` created with the backend.
-     The format can be changed without affecting previously created `Logger`s.
-
-     Default: `.basic`
-     */
-    public var loggingFormat: LogOutputFormat = .basic
-#endif
 }
 
 extension MetricObserver: Equatable {

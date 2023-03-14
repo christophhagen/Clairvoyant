@@ -1,11 +1,29 @@
-#if canImport(Logging)
 import Foundation
 import Logging
+import Clairvoyant
 
-extension MetricObserver {
+public struct MetricLogging {
 
-    public func loggingBackend(label: String) -> LogHandler {
-        let metric: Metric<String> = addMetric(id: label)
+    public let observer: MetricObserver
+
+    /**
+     The logging format to use when using the observer as a logging backend.
+
+     The format determines the detail with which log messages are converted to text when being stored in a metric.
+     The logging format is applied to any new `Logger` created with the backend.
+     The format can be changed without affecting previously created `Logger`s.
+
+     Default: `.basic`
+     */
+    public var loggingFormat: LogOutputFormat
+
+    public init(observer: MetricObserver, loggingFormat: LogOutputFormat = .basic) {
+        self.observer = observer
+        self.loggingFormat = loggingFormat
+    }
+
+    public func backend(label: String) -> LogHandler {
+        let metric: Metric<String> = observer.addMetric(id: label)
         return MetricLogHandler(label: label, metric: metric, format: loggingFormat)
     }
 }
@@ -117,4 +135,3 @@ private extension Logger.Level {
         }
     }
 }
-#endif

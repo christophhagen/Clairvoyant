@@ -29,12 +29,18 @@ let package = Package(
                 .target(name: "Clairvoyant"),
                 .product(name: "Vapor", package: "vapor"),
             ]),
+        .target(
+            name: "ClairvoyantLogging",
+            dependencies: [
+                .target(name: "Clairvoyant"),
+                .product(name: "Logging", package: "swift-log"),
+            ]),
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
                 "Clairvoyant",
                 "ClairvoyantVapor",
+                "ClairvoyantLogging",
             ]),
     ]
 )

@@ -1,12 +1,15 @@
 import XCTest
+import Vapor
 import Logging
 import Clairvoyant
+import ClairvoyantLogging
 
 final class LoggingTests: SelfCleaningTest {
 
     func testBootstrap() async throws {
         let observer = MetricObserver(logFolder: logFolder, logMetricId: "observer.log")
-        LoggingSystem.bootstrap(observer.loggingBackend)
+        let logging = MetricLogging(observer: observer)
+        LoggingSystem.bootstrap(logging.backend)
 
         let entry = "It works"
         let result = "[INFO] \(entry)"
