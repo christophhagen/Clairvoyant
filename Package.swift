@@ -38,6 +38,7 @@ let package = Package(
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
+                .product(name: "XCTVapor", package: "vapor"),
                 "Clairvoyant",
                 "ClairvoyantVapor",
                 "ClairvoyantLogging",
