@@ -247,8 +247,8 @@ extension Metric: AbstractMetric {
 extension Metric: GenericMetric {
 
     public func lastValueData() async -> Data? {
-        if let _lastValue {
-            return try? await fileWriter.encode(_lastValue)
+        if let _lastValue, let data = try? await fileWriter.encode(_lastValue) {
+            return data
         }
         return await fileWriter.lastValueData()
     }
@@ -259,6 +259,8 @@ extension Metric: GenericMetric {
     }
 
     public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
-        await fileWriter.getHistoryData(startingFrom: startDate, upTo: endDate, maximumValueCount: maximumValueCount)
+        let range = startDate < endDate ? startDate...endDate : endDate...startDate
+        let values: [Timestamped<T>] = await fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
+        return (try? await fileWriter.encode(values)) ?? Data()
     }
 }

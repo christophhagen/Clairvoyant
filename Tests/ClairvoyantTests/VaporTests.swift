@@ -71,7 +71,7 @@ final class VaporTests: SelfCleaningTest {
         try app.test(.POST, "metrics/last/\(hash)", headers: ["token" : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
             let body = Data(res.body.readableBytesView)
-            let result = try Timestamped<String>.decode(from: body, using: decoder)
+            let result: Timestamped<String> = try decoder.decode(from: body)
             XCTAssertEqual(result.value, "test")
         })
     }

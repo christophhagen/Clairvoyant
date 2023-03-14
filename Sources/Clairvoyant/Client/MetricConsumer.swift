@@ -56,7 +56,7 @@ public actor MetricConsumer {
             return nil
         }
         do {
-            return try Timestamped<T>.decode(from: data, using: decoder)
+            return try decoder.decode(Timestamped<T>.self, from: data)
         } catch {
             throw MetricError.failedToDecode
         }

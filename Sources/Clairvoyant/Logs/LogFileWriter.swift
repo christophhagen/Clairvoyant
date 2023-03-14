@@ -212,7 +212,7 @@ actor LogFileWriter {
     
     // MARK: Writing
     
-    func decode<T>(_ data: TimestampedValueData, type: T.Type = T.self) throws -> T where T: Decodable {
+    func decode<T>(_ data: Data, type: T.Type = T.self) throws -> T where T: Decodable {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
@@ -220,10 +220,19 @@ actor LogFileWriter {
         }
     }
 
+    func encode<T>(_ value: T) throws -> Data where T: Encodable {
+        do {
+            return try encoder.encode(value)
+        } catch {
+            logError("Failed to encode value: \(error)")
+            throw MetricError.failedToEncode
+        }
+    }
+
     /**
      - Throws:`failedToEncode`
      */
-    func encode<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
+    private func encodeDataForStream<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
         let valueData: Data
         do {
             valueData = try encoder.encode(value.value)
@@ -250,12 +259,13 @@ actor LogFileWriter {
             throw MetricError.failedToOpenLogFile
         }
 
-        let encodedData = try encode(value)
-        writeLastValue(encodedData)
+        let lastValueData = try encode(value)
+        writeLastValue(lastValueData)
 
-        let byteCountData = UInt16(encodedData.count).toData()
-        try writeToLog(data: byteCountData + encodedData, date: value.timestamp)
-        return encodedData
+        let streamEncodedData = try encodeDataForStream(value)
+        let byteCountData = UInt16(streamEncodedData.count).toData()
+        try writeToLog(data: byteCountData + streamEncodedData, date: value.timestamp)
+        return lastValueData
     }
 
     /**
@@ -277,7 +287,7 @@ actor LogFileWriter {
         }
     }
     
-    private func writeLastValue(_ data: TimestampedValueData) {
+    private func writeLastValue(_ data: Data) {
         do {
             try data.write(to: lastValueUrl)
         } catch {
@@ -286,10 +296,6 @@ actor LogFileWriter {
     }
     
     // MARK: Reading
-    
-    func encode<T>(_ value: T) throws -> Data where T: Encodable {
-        try encoder.encode(value)
-    }
     
     func lastValueData() -> TimestampedValueData? {
         guard exists(lastValueUrl) else {
@@ -311,7 +317,7 @@ actor LogFileWriter {
         }
         
         do {
-            return try .decode(from: data, using: decoder)
+            return try decode(data, type: Timestamped<T>.self)
         } catch {
             logError("Failed to decode last value: \(error)")
             deleteLastValueFile()
