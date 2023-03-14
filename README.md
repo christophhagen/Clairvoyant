@@ -5,11 +5,9 @@ It enables the specification of different metrics to publish over a web API, whe
 
 The framework can also be used as a logging backend for [swift-log](https://github.com/apple/swift-log), so that log contents can be made available conveniently over a web api (see [logging backend](#usage-with-swift-log)).
 
-**This repository is in early development**
-
 ## Intention
 
-This framework intends to provide a very lightweight logging and monitoring possibility for Vapor servers. 
+This framework intends to provide a very lightweight logging and monitoring possibility, especially for Vapor servers. 
 It allows publishing, collecting, and logging time-series data in a very simple way.
 The goal is to provide easy remote access to basic information about running services, as well as provide history data.
 
@@ -21,6 +19,10 @@ Clairvoyant is structured around the concept of `metrics`, which are monitored b
 A metric describes a basic data point over time, such as integers, doubles, enums, or other data types. 
 A metric collects any changes to the data point, logs it to disk, and optionally forwards the data to a remote server.
 Metrics are identified by a unique identifier string.
+
+```swift
+import Clairvoyant
+```
 
 ### Metrics
 
@@ -37,7 +39,7 @@ metric.update(123)
 ```
 
 The call to `update()` creates a timestamp for the given value, and persists this pair. 
-Internally, metrics are only updated when the value changes, so calling `update()` multiple times with the same value does not unecessarily increase the size of the log file.
+Internally, metrics are only updated when the value changes, so calling `update()` multiple times with the same value does not unnecessarily increase the size of the log file.
 
 It's also possible to get the last value or a history for each metric.
 
@@ -58,17 +60,13 @@ These functions represent the basic interaction with a metric on the creator sid
 ### Metric observer
 
 A `Metric` requires a `MetricObserver` to receive the data and process it.
-The observer is responsible for writing new data to disk, and providing Vapor routes to access the data.
-Managing access to the metrics is done by a [`MetricAccessManager`](#access-control), which we'll focus on later.
+The observer is responsible for managing different metrics, and provide a common storage location.
 To create an observer, we have to provide a directory where the logging data can be written.
 It also internally writes all errors to a `Metric<String>` with the `id` provided by the parameter `logMetricId`.
 
 ```swift
 let url: URL = ...
-let observer = MetricObserver(
-        logFolder: url, 
-        authenticator: MyAuthenticator(), 
-        logMetricId: "test.log")
+let observer = MetricObserver(logFolder: url, logMetricId: "test.log")
 ```
 
 The logging metric can later be read in the same way as other metrics.
@@ -89,33 +87,39 @@ It's also possible to directly create metrics on the observer:
 let metric: Metric<Int> = observer.addMetric("MyCounter")
 ```
 
-There is also a static property on `MetricObserver` to add metrics to by default:
+There is a static property on `MetricObserver` to add metrics to by default:
 
 ```swift
 MetricObserver.standard = observer
 let metric = Metric("metric", containing: Int.self) // Automatically added to `observer`
 ```
 
-### Exposing metrics
+## Exposing metrics with Vapor
 
 Logging values to disk is great, but the data should also be available for inspection and monitoring.
-This is done by adding routes to the Vapor server, where the metrics can be requested from external clients.
-This can be done e.g. in the `configure()` function of the Vapor instance.
+Clairvoyant provides a separate module `ClairvoyantVapor` to integrate metric access into Vapor servers.
+Each `MetricObserver` can be exposed separately on a subpath of the server.
 
 ```swift
+import Clairvoyant
+import ClairvoyantVapor
+
 func configure(app: Application) {
     let observer = MetricObserver(...)
-    observer.registerRoutes(app, subPath: "metrics")
+    let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
+    observer.registerRoutes(app)
 }
 ```
 
 This will add a number of routes to the default path, which is `/metrics`.
+The path can also be passed as a parameter to `registerRoutes()`.
 
 ### Access control
 
+A `VaporMetricProvider` requires an access manager, as seen in the example above.
 Since the metrics may contain sensitive data, they should only be accessible by authorized entities.
 Access control is left to the application, since there may be many ways to handle authentication and access control.
-To manage access control, a `MetricRequestAccessManager` must be provided.
+To manage access control, a `MetricRequestAccessManager` must be provided for each metric provider.
 
 ```swift
 final class MyAuthenticator: MetricRequestAccessManager {
@@ -130,13 +134,10 @@ final class MyAuthenticator: MetricRequestAccessManager {
 }
 ```
 
-The authenticator must be provided to the initializer of a `MetricObserver`.
+The authenticator must be provided to the initializer of a `VaporMetricProvider`.
 
 ```swift
-let observer = MetricObserver(
-        logFolder: url, 
-        authenticator: MyAuthenticator(), 
-        logMetricId: "test.log")
+let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
 ```
 
 If the authentication should be based on access tokens, it's also possible to implement `MetricAccessManager`.
@@ -158,7 +159,7 @@ Or, if very basic authentication should be used, by using the provided in-memory
 ```swift
 let accessToken: Set<AccessToken> = ...
 let authenticator = AccessTokenManager(accessToken)
-let observer = MetricObserver(logFolder: url, authenticator: authenticator, logMetricId: "test.log")
+let provider = VaporMetricProvider(observer: observer, accessManager: authenticator)
 ```
 
 ### API
@@ -198,11 +199,19 @@ Get the logged values of a metric in a specified time interval. The time interva
 ## Usage with `swift-log`
 
 Clairvoyant can be used as a logging backend for `swift-log`, so that all logs are made available as `String` metrics.
-To forward logs as metrics, simply set an observer as the backend:
+To forward logs as metrics, first import the required module:
+
+```swift
+import Clairvoyant
+import ClairvoyantLogging
+```
+
+Now, simply set an observer as the backend:
 
 ```swift
 let observer = MetricObserver(...)
-LoggingSystem.bootstrap(observer.loggingBackend)
+let logging = MetricsLogging(observer: observer)
+LoggingSystem.bootstrap(logging.backend)
 ```
 
 Each logging entry will then be timestamped and added to a metric with the same `ID` as the logger `label`.
@@ -218,8 +227,12 @@ The logging metrics are made available over the API in the same way as other met
 let metric = observer.getMetric(id: "my.log", type: String.self)
 ```
 
-It's possible to change the logging format by setting the `loggingFormat` property on the observer before creating a logger.
+It's possible to change the logging format by setting the `loggingFormat` property on `MetricLogging` before creating a logger.
 The property applies to each new logger, but changes are not propagated to existing ones.
+
+```swift
+logging.outputFormat = .full
+```
 
 ## Initial requirements
 
@@ -236,9 +249,9 @@ The property applies to each new logger, but changes are not propagated to exist
 - Push changed values to different server
 
 ## Open tasks
+
+- Allow changing the log file size
 - Push updates to remote server
 - Ensure completeness of log when pulling data from remote metrics
-- Split logs if files get too big
 - Provide values as strings/JSON for web view
-- Implement as backend for [swift-log](https://github.com/apple/swift-log#on-the-implementation-of-a-logging-backend-a-loghandler)
 - Implement as backend for [swift-metrics](https://github.com/apple/swift-metrics#implementing-a-metrics-backend-eg-prometheus-client-library)
