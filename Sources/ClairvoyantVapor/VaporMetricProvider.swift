@@ -9,12 +9,16 @@ public final class VaporMetricProvider {
     /// The authentication manager for access to metric information
     public let accessManager: MetricRequestAccessManager
 
+    /// The metric observer exposed through vapor
     public let observer: MetricObserver
 
+    /// The encoder to use for the response data.
     public let encoder: BinaryEncoder
 
     /**
+     - Parameter observer: The metric observer to expose through vapor
      - Parameter accessManager: The handler of authentication to access metric data
+     - Parameter encoder: The encoder to use for the response data. Defaults to the encoder of the observer
      */
     public init(observer: MetricObserver, accessManager: MetricRequestAccessManager, encoder: BinaryEncoder? = nil) {
         self.accessManager = accessManager
