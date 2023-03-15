@@ -94,6 +94,26 @@ public final class MetricObserver {
         return metric
     }
 
+    /**
+     Remove a metric from this observer.
+
+     The metric will no longer be exposed or accessible through this server, but the file data associated with the metric is not deleted.
+     A metric should not be used without an observer. It can continue to record updates, but the updates will not be pushed to remote servers, logging of errors does no longer work, and the data will not be accessible through the observer.
+
+     If the metric is not registered with this observer, then this function does nothing.
+     - Note: Once a metric is removed, it can't be added again.
+     - Parameter metric: The metric to remove.
+     */
+    public func remove<T>(_ metric: Metric<T>) where T: MetricValue {
+        guard let old = observedMetrics[metric.idHash], old.uniqueId == metric.uniqueId else {
+            return
+        }
+        Task {
+            await old.set(observer: nil)
+        }
+        observedMetrics[metric.idHash] = nil
+    }
+
     func observe(_ metric: AbstractMetric) {
         if let old = observedMetrics[metric.idHash], old.uniqueId != metric.uniqueId {
             // Comparing unique ids prevents potential problem:
@@ -106,6 +126,13 @@ public final class MetricObserver {
         observedMetrics[metric.idHash] = metric
     }
 
+    /**
+     Get a metric registered with the observer.
+
+     - Parameter id: The string id of the metric
+     - Parameter type: The type of the metric
+     - Returns: The metric, or `nil`, if no metric with the given id exists, or the type doesn't match
+     */
     public func getMetric<T>(id: String, type: T.Type = T.self) -> Metric<T>? where T: MetricValue {
         observedMetrics[id.hashed()] as? Metric<T>
     }

@@ -180,7 +180,7 @@ The response is an array of `MetricDescription`, encoded with the binary encoder
 
 Get the last value of the metric. The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters). Authentication of the request depends on the chosen implementation.
 
-#### `history/<METRIC_ID_HASH>`
+#### `/history/<METRIC_ID_HASH>`
 
 Get the logged values of a metric in a specified time interval. The time interval is provided in the request body as a binary encoding of a `ClosedRange<Date>`. Authentication of the request depends on the chosen implementation.
 
@@ -234,6 +234,40 @@ The property applies to each new logger, but changes are not propagated to exist
 logging.outputFormat = .full
 ```
 
+## Usage with `swift-metrics`
+
+Clairvoyant can be used as a metrics backend for [`swift-metrics`](https://github.com/apple/swift-metrics), to store metrics and serve them over a web api.
+Each `Counter`, `Recorder`, `Gauge` or `Timer` is forwarded to a metric with the same `label` (`id`). While counters become `Metric<Int>`, all others become `Metric<Double>` (be aware of the unaccuracy of `Double` when using `Recorder.record(Int64)`).
+
+To use a `MetricObserver` as a metrics backend, first import the module:
+
+```swift
+import Clairvoyant
+import ClairvoyantMetrics
+```
+
+Then set the observer as the metrics backend:
+
+```swift
+let observer = MetricObserver(...)
+let metrics = MetricsProvider(observer: observer)
+MetricsSystem.bootstrap(metrics)
+```
+
+Now the metrics can be used, and are available through the web API or locally.
+
+```swift
+let counter = Counter(label: "com.example.BestExampleApp.numberOfRequests")
+counter.increment()
+```
+
+To access the values locally:
+
+```swift
+let metric = observer.getMetric(id: "...", type: String.self)
+let lastValue = await metric.lastValue()
+```
+
 ## Initial requirements
 
 - Allow publishing of individual metrics
@@ -254,4 +288,3 @@ logging.outputFormat = .full
 - Push updates to remote server
 - Ensure completeness of log when pulling data from remote metrics
 - Provide values as strings/JSON for web view
-- Implement as backend for [swift-metrics](https://github.com/apple/swift-metrics#implementing-a-metrics-backend-eg-prometheus-client-library)

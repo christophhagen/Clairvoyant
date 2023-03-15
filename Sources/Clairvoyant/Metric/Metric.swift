@@ -226,6 +226,10 @@ public actor Metric<T> where T: MetricValue {
         await observer?.pushValueToRemoteObservers(data, for: self)
         return true
     }
+
+    public func removeFromObserver() {
+        observer?.remove(self)
+    }
 }
 
 extension Metric: AbstractMetric {
