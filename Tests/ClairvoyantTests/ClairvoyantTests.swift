@@ -128,7 +128,7 @@ final class ClairvoyantTests: SelfCleaningTest {
         let totalSize = sizes.reduce(0, +)
         let averageSize = Double(totalSize)/1_000_000
         let largerFileSize = sizes.max()!
-        XCTAssertTrue(totalSize > LogFileWriter.maximumFileSizeInBytes)
+        XCTAssertTrue(totalSize > 10_000_000)
         print("Total \(totalSize) bytes, average \(averageSize) bytes, max \(largerFileSize)")
 
         print("Checking first file")

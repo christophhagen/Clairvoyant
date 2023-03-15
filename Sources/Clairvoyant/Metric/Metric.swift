@@ -32,7 +32,7 @@ public actor Metric<T> where T: MetricValue {
     /// The cached last value of the metric
     private var _lastValue: Timestamped<T>? = nil
 
-    private let fileWriter: LogFileWriter
+    private let fileWriter: LogFileWriter<T>
 
     /// The unique random id assigned to each metric to distinguish them
     let uniqueId: Int
@@ -258,7 +258,7 @@ extension Metric: GenericMetric {
     }
 
     public func update(_ dataPoint: Data) async throws {
-        let value: Timestamped<T> = try await fileWriter.decode(dataPoint)
+        let value = try await fileWriter.decodeTimestampedValue(from: dataPoint)
         try await update(value)
     }
 

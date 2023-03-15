@@ -2,15 +2,11 @@ import Foundation
 
 private typealias TimestampedEncodedData = (date: Date, data: Data)
 
-actor LogFileWriter {
+actor LogFileWriter<T> where T: MetricValue {
     
-    static let maximumFileSizeInBytes = 10_000_000
+    private let maximumFileSizeInBytes = 10_000_000
     
-    private static let byteCountLength = 2
-    
-    var byteCountLength: Int {
-        LogFileWriter.byteCountLength
-    }
+    private let byteCountLength = 2
     
     let metricId: MetricId
     
@@ -110,7 +106,7 @@ actor LogFileWriter {
             return try createAndOpenFile(with: date)
         }
         // Open new file if old one is too large
-        guard fileSize(at: url) < LogFileWriter.maximumFileSizeInBytes else {
+        guard fileSize(at: url) < maximumFileSizeInBytes else {
             return try createAndOpenFile(with: date)
         }
         do {
@@ -212,15 +208,15 @@ actor LogFileWriter {
     
     // MARK: Writing
     
-    func decode<T>(_ data: Data, type: T.Type = T.self) throws -> T where T: Decodable {
+    func decodeTimestampedValue(from data: Data) throws -> Timestamped<T> {
         do {
-            return try decoder.decode(T.self, from: data)
+            return try decoder.decode(Timestamped<T>.self, from: data)
         } catch {
             throw MetricError.failedToDecode
         }
     }
 
-    func encode<T>(_ value: T) throws -> Data where T: Encodable {
+    func encode(_ value: Timestamped<T>) throws -> Data {
         do {
             return try encoder.encode(value)
         } catch {
@@ -229,10 +225,19 @@ actor LogFileWriter {
         }
     }
 
+    func encode(_ values: [Timestamped<T>]) throws -> Data {
+        do {
+            return try encoder.encode(values)
+        } catch {
+            logError("Failed to encode values: \(error)")
+            throw MetricError.failedToEncode
+        }
+    }
+
     /**
      - Throws:`failedToEncode`
      */
-    private func encodeDataForStream<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
+    private func encodeDataForStream(_ value: Timestamped<T>) throws -> TimestampedValueData {
         let valueData: Data
         do {
             valueData = try encoder.encode(value.value)
@@ -254,7 +259,7 @@ actor LogFileWriter {
     /**
      - Throws: `failedToOpenLogFile`, `failedToEncode`
      */
-    func write<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
+    func write(_ value: Timestamped<T>) throws -> TimestampedValueData {
         guard ensureExistenceOfLogFolder() else {
             throw MetricError.failedToOpenLogFile
         }
@@ -281,7 +286,7 @@ actor LogFileWriter {
             logError("Failed to write data: \(error)")
             throw MetricError.failedToOpenLogFile
         }
-        if numberOfBytesInCurrentFile >= LogFileWriter.maximumFileSizeInBytes {
+        if numberOfBytesInCurrentFile >= maximumFileSizeInBytes {
             closeFile()
             needsNewLogFile = true
         }
@@ -311,13 +316,13 @@ actor LogFileWriter {
         }
     }
     
-    func lastValue<T>() -> Timestamped<T>? where T: Decodable {
+    func lastValue() -> Timestamped<T>? {
         guard let data = lastValueData() else {
             return nil
         }
         
         do {
-            return try decode(data, type: Timestamped<T>.self)
+            return try decodeTimestampedValue(from: data)
         } catch {
             logError("Failed to decode last value: \(error)")
             deleteLastValueFile()
@@ -327,12 +332,12 @@ actor LogFileWriter {
     
     // MARK: History
     
-    func getHistory<T>(in range: ClosedRange<Date>, maximumValueCount: Int? = nil) -> [Timestamped<T>] where T: Decodable {
+    func getHistory(in range: ClosedRange<Date>, maximumValueCount: Int? = nil) -> [Timestamped<T>] {
         var remainingValuesToRead = maximumValueCount ?? .max
         var result: [Timestamped<T>] = []
         let files = getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
         for file in files {
-            let elements = decode(T.self, from: file.url)
+            let elements = decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .prefix(remainingValuesToRead)
             result.append(contentsOf: elements)
@@ -344,8 +349,8 @@ actor LogFileWriter {
         return result
     }
 
-    func getFullHistory<T>(maximumValueCount: Int? = nil) -> [Timestamped<T>] where T: Decodable {
-       getAllLogFiles().map { decode(T.self, from: $0) }.joined().map { $0 }
+    func getFullHistory(maximumValueCount: Int? = nil) -> [Timestamped<T>] {
+       getAllLogFiles().map { decodeTimestampedStream(from: $0) }.joined().map { $0 }
     }
     
     func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) -> Data {
@@ -401,7 +406,7 @@ actor LogFileWriter {
         return result
     }
     
-    private func decode<T>(_ type: T.Type = T.self, from url: URL) -> [Timestamped<T>] where T: Decodable {
+    private func decodeTimestampedStream(from url: URL) -> [Timestamped<T>] {
         guard exists(url) else {
             logError("File \(url.lastPathComponent): Not found")
             return []
