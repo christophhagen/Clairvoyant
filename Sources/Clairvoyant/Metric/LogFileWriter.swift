@@ -2,10 +2,10 @@ import Foundation
 
 private typealias TimestampedEncodedData = (date: Date, data: Data)
 
-actor LogFileWriter<T> where T: MetricValue {
-    
+final class LogFileWriter<T> where T: MetricValue {
     
     var maximumFileSizeInBytes: Int
+
     private let byteCountLength = 2
     
     let metricId: MetricId

@@ -98,11 +98,9 @@ public actor Metric<T> where T: MetricValue {
             hash: idHash,
             folder: observer.logFolder,
             encoder: observer.encoder,
-        Task {
-            await fileWriter.set(metric: self)
-        }
             decoder: observer.decoder,
             fileSize: fileSize)
+        fileWriter.set(metric: self)
     }
 
     init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
@@ -121,11 +119,9 @@ public actor Metric<T> where T: MetricValue {
             hash: idHash,
             folder: logFolder,
             encoder: encoder,
-        Task {
-            await fileWriter.set(metric: self)
-        }
             decoder: decoder,
             fileSize: fileSize)
+        fileWriter.set(metric: self)
     }
 
 
@@ -180,11 +176,11 @@ public actor Metric<T> where T: MetricValue {
      Calls to this function should be sparse, since reading a file from disk is expensive.
      - Returns: The last value of the metric, timestamped, or nil, if no value could be provided.
      */
-    public func lastValue() async -> Timestamped<T>? {
+    public func lastValue() -> Timestamped<T>? {
         if let _lastValue {
             return _lastValue
         }
-        return await fileWriter.lastValue()
+        return fileWriter.lastValue()
     }
 
     /**
@@ -193,8 +189,8 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged within the given date range.
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func history(in range: ClosedRange<Date>) async -> [Timestamped<T>] {
-        await fileWriter.getHistory(in: range)
+    public func history(in range: ClosedRange<Date>) -> [Timestamped<T>] {
+        fileWriter.getHistory(in: range)
     }
 
     /**
@@ -202,8 +198,8 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged for the metric
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func fullHistory() async -> [Timestamped<T>] {
-        await fileWriter.getFullHistory()
+    public func fullHistory() -> [Timestamped<T>] {
+        fileWriter.getFullHistory()
     }
 
     @discardableResult
@@ -227,8 +223,8 @@ public actor Metric<T> where T: MetricValue {
      - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
     @discardableResult
-    public func update(_ value: T, timestamp: Date = Date()) async throws -> Bool {
-        try await update(.init(timestamp: timestamp, value: value))
+    public func update(_ value: T, timestamp: Date = Date()) throws -> Bool {
+        try update(.init(timestamp: timestamp, value: value))
     }
 
     /**
@@ -241,13 +237,15 @@ public actor Metric<T> where T: MetricValue {
      - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
     @discardableResult
-    public func update(_ value: Timestamped<T>) async throws -> Bool {
-        if let lastValue = await lastValue()?.value, lastValue == value.value {
+    public func update(_ value: Timestamped<T>) throws -> Bool {
+        if let lastValue = lastValue()?.value, lastValue == value.value {
             return false
         }
-        let data = try await fileWriter.write(value)
+        let data = try fileWriter.write(value)
         _lastValue = value
-        await observer?.pushValueToRemoteObservers(data, for: self)
+        Task {
+            await observer?.pushValueToRemoteObservers(data, for: self)
+        }
         return true
     }
 
@@ -274,21 +272,21 @@ extension Metric: AbstractMetric {
 
 extension Metric: GenericMetric {
 
-    public func lastValueData() async -> Data? {
-        if let _lastValue, let data = try? await fileWriter.encode(_lastValue) {
+    public func lastValueData() -> Data? {
+        if let _lastValue, let data = try? fileWriter.encode(_lastValue) {
             return data
         }
-        return await fileWriter.lastValueData()
+        return fileWriter.lastValueData()
     }
 
-    public func update(_ dataPoint: Data) async throws {
-        let value = try await fileWriter.decodeTimestampedValue(from: dataPoint)
-        try await update(value)
+    public func update(_ dataPoint: Data) throws {
+        let value = try fileWriter.decodeTimestampedValue(from: dataPoint)
+        try update(value)
     }
 
-    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
+    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) -> Data {
         let range = startDate < endDate ? startDate...endDate : endDate...startDate
-        let values: [Timestamped<T>] = await fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
-        return (try? await fileWriter.encode(values)) ?? Data()
+        let values: [Timestamped<T>] = fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
+        return (try? fileWriter.encode(values)) ?? Data()
     }
 }
