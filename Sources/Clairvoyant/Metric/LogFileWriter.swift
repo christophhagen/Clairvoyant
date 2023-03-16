@@ -269,16 +269,14 @@ final class LogFileWriter<T> where T: MetricValue {
     /**
      - Throws: `failedToOpenLogFile`, `failedToEncode`
      */
-    func write(_ value: Timestamped<T>) throws -> TimestampedValueData {
+    func write(_ value: Timestamped<T>) throws {
         guard ensureExistenceOfLogFolder() else {
             throw MetricError.failedToOpenLogFile
         }
 
-        let lastValueData = try write(lastValue: value)
-
+        try write(lastValue: value)
         let streamEncodedData = try encodeDataForStream(value)
         try writeToLog(data: streamEncodedData, date: value.timestamp)
-        return lastValueData
     }
 
     func writeOnlyToLog(_ value: Timestamped<T>) throws {
@@ -309,11 +307,9 @@ final class LogFileWriter<T> where T: MetricValue {
         }
     }
 
-    @discardableResult
-    func write(lastValue: Timestamped<T>) throws -> Data {
+    func write(lastValue: Timestamped<T>) throws {
         let data = try encode(lastValue)
         writeLastValue(data)
-        return data
     }
     
     private func writeLastValue(_ data: Data) {

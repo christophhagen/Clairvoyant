@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RemoteMetricObserver: Equatable, Hashable {
+public struct RemoteMetricObserver {
 
     /**
      The url of the remote server.
@@ -17,5 +17,19 @@ public struct RemoteMetricObserver: Equatable, Hashable {
     public init(remoteUrl: URL, authenticationToken: MetricAccessToken) {
         self.remoteUrl = remoteUrl
         self.authenticationToken = authenticationToken
+    }
+}
+
+extension RemoteMetricObserver: Equatable {
+
+    public static func == (lhs: RemoteMetricObserver, rhs: RemoteMetricObserver) -> Bool {
+        lhs.remoteUrl == rhs.remoteUrl
+    }
+}
+
+extension RemoteMetricObserver: Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(remoteUrl)
     }
 }

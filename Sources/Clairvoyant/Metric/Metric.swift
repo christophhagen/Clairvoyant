@@ -211,15 +211,6 @@ public actor Metric<T> where T: MetricValue {
         fileWriter.getFullHistory()
     }
 
-    @discardableResult
-    public func push(to remoteObserver: RemoteMetricObserver) async -> Bool {
-        guard let observer else {
-            return false
-        }
-        observer.push(self, to: remoteObserver)
-        return true
-    }
-
     /**
      Update the value of the metric.
 
@@ -257,11 +248,9 @@ public actor Metric<T> where T: MetricValue {
                 return false
             }
         }
-        let data = try fileWriter.write(value)
+        try fileWriter.write(value)
         _lastValue = value
-        Task {
-            await observer?.pushValueToRemoteObservers(data, for: self)
-        }
+        push(value)
         return true
     }
 
@@ -294,6 +283,87 @@ public actor Metric<T> where T: MetricValue {
         _lastValue = lastValue
         if let lastValue {
             _ = try? fileWriter.write(lastValue: lastValue)
+        }
+    }
+
+    // MARK: Pushing to remotes
+
+    // TODO: Persist pending values between launches?
+
+    /// The remote observers of the metric, with the pending data points for each
+    private var remoteObservers: [RemoteMetricObserver : [Timestamped<T>]] = [:]
+
+    /**
+     Add a remote to receive all updates to the metric.
+
+     The remote observer must be an instance of a `MetricObserver` exposed through Vapor.
+     - SeeAlso: Check the documentation about `ClairvoyantVapor` on how to setup `Vapor` with `Clairvoyant`
+     */
+    public func addRemoteObserver(_ remoteObserver: RemoteMetricObserver) {
+        guard remoteObservers[remoteObserver] == nil else {
+            return
+        }
+        remoteObservers[remoteObserver] = []
+    }
+
+    private func push(_ value: Timestamped<T>) {
+        push([value])
+    }
+
+    private func push(_ values: [Timestamped<T>]) {
+        guard !remoteObservers.isEmpty else {
+            return
+        }
+        Task {
+            await push(values)
+        }
+    }
+
+    private func push(_ values: [Timestamped<T>]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for (observer, pending) in remoteObservers {
+                group.addTask {
+                    await self.push(values: pending + values, to: observer)
+                }
+            }
+        }
+    }
+
+    private func push(values: [Timestamped<T>], to remote: RemoteMetricObserver) async {
+        // 1: Get all pending values
+        guard let data = try? fileWriter.encode(values) else {
+            remoteObservers[remote] = values
+            return
+        }
+        // 2: Attempt transmission
+        guard await self.push(_data: data, toRemoteObserver: remote) else {
+            remoteObservers[remote] = values
+            return
+        }
+
+        // 3: Remove successful transmissions
+        remoteObservers[remote] = []
+    }
+
+    private func push(_data: Data, toRemoteObserver remoteObserver: RemoteMetricObserver) async -> Bool {
+        let remoteUrl = remoteObserver.remoteUrl
+        do {
+            let url = remoteUrl.appendingPathComponent("push/\(idHash)")
+            var request = URLRequest(url: url)
+            request.setValue(remoteObserver.authenticationToken.base64, forHTTPHeaderField: "token")
+            let (_, response) = try await urlSessionData(.shared, for: request)
+            guard let response = response as? HTTPURLResponse else {
+                log("Invalid response pushing value to \(remoteUrl.path): \(response)")
+                return false
+            }
+            guard response.statusCode == 200 else {
+                log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)")
+                return false
+            }
+            return true
+        } catch {
+            log("Failed to push value to \(remoteUrl.path): \(error)")
+            return false
         }
     }
 }

@@ -47,13 +47,6 @@ public final class MetricObserver {
     private var observedMetrics: [MetricIdHash : AbstractMetric] = [:]
 
     /**
-     The remote observers of metrics logged with this instance.
-
-     All updates to metrics are pushed to each remote observer.
-     */
-    private var remoteObservers: [MetricIdHash : Set<RemoteMetricObserver>] = [:]
-
-    /**
      Create a new observer.
 
      Each observer creates a metric with the id `logMetricId` to log internal errors.
@@ -191,50 +184,6 @@ public final class MetricObserver {
             throw MetricError.badMetricId
         }
         return metric
-    }
-
-    // MARK: Remote observers
-
-    func push<T>(_ metric: Metric<T>, to remote: RemoteMetricObserver) {
-        if remoteObservers[metric.idHash] == nil {
-            remoteObservers[metric.idHash] = [remote]
-        } else {
-            remoteObservers[metric.idHash]!.insert(remote)
-        }
-    }
-
-    func pushValueToRemoteObservers(_ data: TimestampedValueData, for metric: AbstractMetric) async {
-        guard let observers = remoteObservers[metric.idHash] else {
-            return
-        }
-        await withTaskGroup(of: Void.self) { group in
-            for observer in observers {
-                group.addTask {
-                    await self.push(_data: data, for: metric, toRemoteObserver: observer)
-                }
-            }
-        }
-    }
-
-    private func push(_data: TimestampedValueData, for metric: AbstractMetric, toRemoteObserver remoteObserver: RemoteMetricObserver) async {
-
-        let remoteUrl = remoteObserver.remoteUrl
-        do {
-            let url = remoteUrl.appendingPathComponent("push/\(metric.id)")
-            var request = URLRequest(url: url)
-            request.setValue(remoteObserver.authenticationToken.base64, forHTTPHeaderField: "token")
-            let (_, response) = try await urlSessionData(.shared, for: request)
-            guard let response = response as? HTTPURLResponse else {
-                log("Invalid response pushing value to \(remoteUrl.path): \(response)", for: metric.id)
-                return
-            }
-            guard response.statusCode == 200 else {
-                log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)", for: metric.id)
-                return
-            }
-        } catch {
-            log("Failed to push value to \(remoteUrl.path): \(error)", for: metric.id)
-        }
     }
 
     // MARK: Routes
