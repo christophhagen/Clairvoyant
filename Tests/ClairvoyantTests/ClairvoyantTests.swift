@@ -89,7 +89,7 @@ final class ClairvoyantTests: SelfCleaningTest {
         }
 
         let end = Date()
-        let data = await metric.history(from: start, to: end)
+        let data = await metric.encodedHistoryData(from: start, to: end)
         let decoder = CBORDecoder()
 
         let client = MetricConsumer(url: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))

@@ -59,7 +59,23 @@ public final class VaporMetricProvider {
      - Parameter subPath: The server route subpath where the properties can be accessed
      */
     public func registerRoutes(_ app: Application, subPath: String = "metrics") {
+        registerMetricListRoute(app, subPath: subPath)
+        registerLastValueCollectionRoute(app, subPath: subPath)
+        registerLastValueRoute(app, subPath: subPath)
+        registerHistoryRoute(app, subPath: subPath)
+        registerRemotePushRoute(app, subPath: subPath)
+    }
 
+    /**
+     The route to access the list of registered metrics.
+
+     - Type: `POST`
+     - Path: `/metrics/list`
+     - Headers:
+        - `token` : The access token for the client
+     - Response: `[MetricDescription]`
+     */
+    func registerMetricListRoute(_ app: Application, subPath: String) {
         app.post(subPath, "list") { [weak self] request async throws in
             guard let self else {
                 throw Abort(.internalServerError)
@@ -68,7 +84,18 @@ public final class VaporMetricProvider {
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
             return try self.getDataOfRecordedMetricsList()
         }
+    }
 
+    /**
+     The route to access the last values of all metrics.
+
+     - Type: `POST`
+     - Path: `/metrics/last/all`
+     - Headers:
+        - `token` : The access token for the client
+     - Response: `[String : Data]`, a mapping between ID hash and encoded timestamped value.
+     */
+    func registerLastValueCollectionRoute(_ app: Application, subPath: String) {
         app.post(subPath, "last", "all") { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
@@ -77,7 +104,19 @@ public final class VaporMetricProvider {
             try self.accessManager.metricListAccess(isAllowedForRequest: request)
             return try await self.getDataOfLastValuesForAllMetrics()
         }
+    }
 
+    /**
+     The route to access the last value of a metric.
+
+     - Type: `POST`
+     - Path: `/metrics/last/<ID_HASH>`
+     - Headers:
+        - `token` : The access token for the client
+     - Response: `Timestamped<T>`, the encoded timestamped value.
+     - Errors: `410`, if no value is available
+     */
+    func registerLastValueRoute(_ app: Application, subPath: String) {
         app.post(subPath, "last", .parameter(hashParameterName)) { [weak self] request in
             guard let self else {
                 throw Abort(.internalServerError)
@@ -90,7 +129,19 @@ public final class VaporMetricProvider {
             }
             return data
         }
+    }
 
+    /**
+     The route to access historic values of a metric.
+
+     - Type: `POST`
+     - Path: `/metrics/history/<ID_HASH>`
+     - Headers:
+        - `token` : The access token for the client
+     - Body: `MetricHistoryRequest`
+     - Response: `[Timestamped<T>]`, the encoded timestamped values.
+     */
+    func registerHistoryRoute(_ app: Application, subPath: String) {
         app.post(subPath, "history", .parameter(hashParameterName)) { [weak self] request -> Data in
             guard let self else {
                 throw Abort(.internalServerError)
@@ -98,9 +149,20 @@ public final class VaporMetricProvider {
 
             let metric = try self.getAccessibleMetric(request)
             let range = try request.decodeBody(as: MetricHistoryRequest.self)
-            return await metric.history(from: range.start, to: range.end, maximumValueCount: range.limit)
+            return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
+    }
 
+    /**
+     The route to update a metric from a remote.
+
+     - Type: `POST`
+     - Path: `/metrics/push/<ID_HASH>`
+     - Headers:
+        - `token` : The access token for the client
+     - Body: `[Timestamped<T>]`
+     */
+    func registerRemotePushRoute(_ app: Application, subPath: String) {
         app.post(subPath, "push", .parameter(hashParameterName)) { [weak self] request -> Void in
             guard let self else {
                 throw Abort(.internalServerError)

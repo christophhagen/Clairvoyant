@@ -328,7 +328,11 @@ extension Metric: GenericMetric {
         try update(values)
     }
 
-    public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) -> Data {
+    /**
+     The history of a metric in a specific range.
+     - Returns: The encoded data points, i.e. [Timestamped<T>]
+     */
+    public func encodedHistoryData(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) -> Data {
         let range = startDate < endDate ? startDate...endDate : endDate...startDate
         let values: [Timestamped<T>] = fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
         return (try? fileWriter.encode(values)) ?? Data()

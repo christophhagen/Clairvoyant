@@ -20,5 +20,9 @@ public protocol GenericMetric {
      */
     func addDataFromRemote(_ data: Data) async throws
 
-    func history(from startDate: Date, to endDate: Date, maximumValueCount: Int?) async -> Data
+    /**
+     The history of a metric in a specific range.
+     - Returns: The encoded data points, i.e. [Timestamped<T>]
+     */
+    func encodedHistoryData(from startDate: Date, to endDate: Date, maximumValueCount: Int?) async -> Data
 }
