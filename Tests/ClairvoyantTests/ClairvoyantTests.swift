@@ -105,13 +105,12 @@ final class ClairvoyantTests: SelfCleaningTest {
         let observer = getIntMetricAndObserver()
         let metric = observer.metric
 
-        // 10 MByte per file
-        // Around 12 B per entry
-        for i in 0..<1_000_000 {
-            let timestamp = Date(timeIntervalSince1970: TimeInterval(i))
-            try await metric.update(i, timestamp: timestamp)
-            if i % 100000 == 0 { print("\(i) updates completed") }
-        }
+        // 1 MByte per file
+        await metric.setMaximumFileSize(1_000_000)
+
+        // Around 15 B per entry
+        let values = (0..<100_000).map { Timestamped<Int>(value: $0, timestamp: Date(timeIntervalSince1970: TimeInterval($0))) }
+        try await metric.update(values)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: logFolder.path))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: logFolder.path).count, 1)
@@ -122,27 +121,24 @@ final class ClairvoyantTests: SelfCleaningTest {
         let sizes = try files.map {
             let attributes = try FileManager.default.attributesOfItem(atPath: $0.path)
             let size = Int(attributes[.size] as? UInt64 ?? 0)
-            print("\($0.lastPathComponent): \(size) bytes")
+            print("File '\($0.lastPathComponent)': \(size) bytes")
             return size
         }
         let totalSize = sizes.reduce(0, +)
-        let averageSize = Double(totalSize)/1_000_000
+        let averageSize = Double(totalSize)/100_000
         let largerFileSize = sizes.max()!
-        XCTAssertTrue(totalSize > 10_000_000)
+        XCTAssertTrue(totalSize > 1_000_000)
         print("Total \(totalSize) bytes, average \(averageSize) bytes, max \(largerFileSize)")
 
-        print("Checking first file")
         // Get entries from first file
         let h1 = await metric.history(in: Date(0)...Date(100))
         XCTAssertEqual(h1.count, 101)
 
-        print("Checking both files")
         // Get entries from both files
         let start = Double(largerFileSize)/averageSize - 5000
         let h2 = await metric.history(in: Date(start)...Date(start + 10000))
         XCTAssertEqual(h2.count, 10000)
 
-        print("Checking last file")
         // Get entries from last file
         let h3 = await metric.history(in: Date(start + 10000)...Date(start + 20000))
         XCTAssertEqual(h3.count, 10000)
@@ -162,6 +158,15 @@ final class ClairvoyantTests: SelfCleaningTest {
                 XCTAssertEqual(last.value, value)
             }
         }
+    }
+
+    func testOldValue() async throws {
+        let observer = getIntMetricAndObserver()
+        let result1 = try await observer.metric.update(1)
+        XCTAssertTrue(result1)
+
+        let result2 = try await observer.metric.update(2, timestamp: Date().advanced(by: -1))
+        XCTAssertFalse(result2)
     }
 
 }

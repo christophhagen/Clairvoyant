@@ -208,10 +208,18 @@ final class LogFileWriter<T> where T: MetricValue {
     }
     
     // MARK: Writing
-    
-    func decodeTimestampedValue(from data: Data) throws -> Timestamped<T> {
+
+    private func decodeTimestampedValue(from data: Data) throws -> Timestamped<T> {
         do {
-            return try decoder.decode(Timestamped<T>.self, from: data)
+            return try decoder.decode(from: data)
+        } catch {
+            throw MetricError.failedToDecode
+        }
+    }
+
+    func decodeTimestampedValues(from data: Data) throws -> [Timestamped<T>] {
+        do {
+            return try decoder.decode(from: data)
         } catch {
             throw MetricError.failedToDecode
         }
@@ -254,7 +262,8 @@ final class LogFileWriter<T> where T: MetricValue {
             logError("Failed to encode timestamp: \(error)")
             throw MetricError.failedToEncode
         }
-        return timestampedData + valueData
+        let count = timestampedData.count + valueData.count
+        return UInt16(count).toData() + timestampedData + valueData
     }
 
     /**
@@ -265,13 +274,20 @@ final class LogFileWriter<T> where T: MetricValue {
             throw MetricError.failedToOpenLogFile
         }
 
-        let lastValueData = try encode(value)
-        writeLastValue(lastValueData)
+        let lastValueData = try write(lastValue: value)
 
         let streamEncodedData = try encodeDataForStream(value)
-        let byteCountData = UInt16(streamEncodedData.count).toData()
-        try writeToLog(data: byteCountData + streamEncodedData, date: value.timestamp)
+        try writeToLog(data: streamEncodedData, date: value.timestamp)
         return lastValueData
+    }
+
+    func writeOnlyToLog(_ value: Timestamped<T>) throws {
+        guard ensureExistenceOfLogFolder() else {
+            throw MetricError.failedToOpenLogFile
+        }
+
+        let streamEncodedData = try encodeDataForStream(value)
+        try writeToLog(data: streamEncodedData, date: value.timestamp)
     }
 
     /**
@@ -291,6 +307,13 @@ final class LogFileWriter<T> where T: MetricValue {
             closeFile()
             needsNewLogFile = true
         }
+    }
+
+    @discardableResult
+    func write(lastValue: Timestamped<T>) throws -> Data {
+        let data = try encode(lastValue)
+        writeLastValue(data)
+        return data
     }
     
     private func writeLastValue(_ data: Data) {
@@ -424,7 +447,7 @@ final class LogFileWriter<T> where T: MetricValue {
             return try extractElements(from: data, file: url.lastPathComponent)
                 .map {
                     let value = try decoder.decode(T.self, from: $0.data.advanced(by: skippedBytes))
-                    return .init(timestamp: $0.date, value: value)
+                    return .init(value: value, timestamp: $0.date)
                 }
         } catch {
             logError("File \(url.lastPathComponent): Failed to decode: \(error)")

@@ -13,7 +13,12 @@ public protocol GenericMetric {
 
     func lastValueData() async -> Data?
 
-    func update(_ dataPoint: Data) async throws
+    /**
+     Update a metric with data received from a remote
+     - Note: This function is only called if the remote allows remote updating
+     - Parameter data: The encoded data points, as an array of timestamped values
+     */
+    func addDataFromRemote(_ data: Data) async throws
 
     func history(from startDate: Date, to endDate: Date, maximumValueCount: Int?) async -> Data
 }

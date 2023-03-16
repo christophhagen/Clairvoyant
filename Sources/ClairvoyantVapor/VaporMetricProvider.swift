@@ -116,7 +116,7 @@ public final class VaporMetricProvider {
             }
 
             // Save value for metric
-            try await metric.update(valueData)
+            try await metric.addDataFromRemote(valueData)
         }
     }
 }

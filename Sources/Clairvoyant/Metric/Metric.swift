@@ -59,13 +59,22 @@ public actor Metric<T> where T: MetricValue {
      The size can be changed on a metric without affecting other metrics or the observer.
      */
     public var maximumFileSizeInBytes: Int {
-        set {
-            fileWriter.maximumFileSizeInBytes = newValue
-        }
-        get {
-            fileWriter.maximumFileSizeInBytes
-        }
+        fileWriter.maximumFileSizeInBytes
     }
+    
+    /**
+     Set the maximum size of the log files (in bytes).
+
+     Log files are split into files of this size. This limit will be slightly exceeded by each file,
+     since a new file is begun if the current file already larger than the limit.
+     A file always contains complete data points.
+     The size can be changed on a metric without affecting other metrics or the observer.
+     */
+    public func setMaximumFileSize(_ bytes: Int) {
+        fileWriter.maximumFileSizeInBytes = bytes
+    }
+
+
 
     /**
      Create a new metric.
@@ -224,22 +233,29 @@ public actor Metric<T> where T: MetricValue {
      */
     @discardableResult
     public func update(_ value: T, timestamp: Date = Date()) throws -> Bool {
-        try update(.init(timestamp: timestamp, value: value))
+        try update(.init(value: value, timestamp: timestamp))
     }
 
     /**
      Update the value of the metric.
 
      This function will create a new timestamped value and forward it for logging.
-     - Note: The value is only written to the log, if it is different to the previous one.
+     - Note: The value is only written to the log, if it is different to and more recent than the previous one.
      - Parameter value: The timestamped value to set
      - Returns: `true`, if the value was written, `false`, if it was equal to the last value.
      - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
     @discardableResult
     public func update(_ value: Timestamped<T>) throws -> Bool {
-        if let lastValue = lastValue()?.value, lastValue == value.value {
-            return false
+        if let lastValue = lastValue() {
+            guard value.value != lastValue.value else {
+                // Skip duplicate elements to save space
+                return false
+            }
+            guard value.timestamp >= lastValue.timestamp else {
+                // Skip older data points to ensure that log is always sorted
+                return false
+            }
         }
         let data = try fileWriter.write(value)
         _lastValue = value
@@ -251,6 +267,34 @@ public actor Metric<T> where T: MetricValue {
 
     public func removeFromObserver() {
         observer?.remove(self)
+    }
+
+    /**
+     Update the metric with a sequence of values.
+
+     The given sequence is sorted and added to the log. Elements older than the last value are skipped.
+     */
+    public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<T> {
+        let sorted = values.sorted { $0.timestamp }
+        var lastValue = lastValue()
+        for element in sorted {
+            if let lastValue {
+                guard element.value != lastValue.value else {
+                    // Skip duplicate elements to save space
+                    continue
+                }
+                guard element.timestamp >= lastValue.timestamp else {
+                    // Skip older data points to ensure that log is always sorted
+                    continue
+                }
+            }
+            try fileWriter.writeOnlyToLog(element)
+            lastValue = element
+        }
+        _lastValue = lastValue
+        if let lastValue {
+            _ = try? fileWriter.write(lastValue: lastValue)
+        }
     }
 }
 
@@ -279,9 +323,9 @@ extension Metric: GenericMetric {
         return fileWriter.lastValueData()
     }
 
-    public func update(_ dataPoint: Data) throws {
-        let value = try fileWriter.decodeTimestampedValue(from: dataPoint)
-        try update(value)
+    public func addDataFromRemote(_ dataPoint: Data) throws {
+        let values = try fileWriter.decodeTimestampedValues(from: dataPoint)
+        try update(values)
     }
 
     public func history(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) -> Data {
