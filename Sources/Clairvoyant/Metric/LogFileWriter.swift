@@ -4,8 +4,8 @@ private typealias TimestampedEncodedData = (date: Date, data: Data)
 
 actor LogFileWriter<T> where T: MetricValue {
     
-    private let maximumFileSizeInBytes = 10_000_000
     
+    var maximumFileSizeInBytes: Int
     private let byteCountLength = 2
     
     let metricId: MetricId
@@ -32,7 +32,7 @@ actor LogFileWriter<T> where T: MetricValue {
     /// The internal file manager used to access files
     let fileManager: FileManager = .default
     
-    init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder) {
+    init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
         let metricFolder = folder.appendingPathComponent(hash)
         self.metricId = id
         self.metricIdHash = hash
@@ -40,6 +40,7 @@ actor LogFileWriter<T> where T: MetricValue {
         self.lastValueUrl = metricFolder.appendingPathComponent("last")
         self.encoder = encoder
         self.decoder = decoder
+        self.maximumFileSizeInBytes = fileSize
     }
     
     deinit {

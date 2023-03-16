@@ -20,7 +20,18 @@ public final class MetricObserver {
     public let encoder: BinaryEncoder
 
     /// The decoder used to decode log entries when providing history data
-    let decoder: BinaryDecoder
+    public let decoder: BinaryDecoder
+
+    /**
+     The maximum size of the log files (in bytes).
+
+     Log files are split into files of this size. This limit will be slightly exceeded by each file,
+     since a new file is begun if the current file already larger than the limit.
+     A file always contains complete data points.
+     The maximum size is assigned to all new metrics, but does not affect already created ones.
+     The size can be changed on a metric without affecting other metrics or the observer.
+     */
+    public var maximumFileSizeInBytes: Int
 
     /// The internal metric used for logging
     private let logMetric: Metric<String>
@@ -50,6 +61,11 @@ public final class MetricObserver {
 
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
      - Parameter logMetricId: The id of the metric for internal log data
+     - Parameter logMetricName: A name for the logging metric
+     - Parameter logMetricDescription: A textual description of the logging metric
+     - Parameter encoder: The encoder to use for log files
+     - Parameter decoder: The decoder to use for log files
+     - Parameter fileSize: The maximum size of files in bytes
      */
     public init(
         logFolder: URL,
@@ -57,11 +73,13 @@ public final class MetricObserver {
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
         encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
-        decoder: BinaryDecoder = CBORDecoder()) {
+        decoder: BinaryDecoder = CBORDecoder(),
+        fileSize: Int = 10_000_000) {
 
             self.uniqueId = .random()
             self.encoder = encoder
             self.decoder = decoder
+            self.maximumFileSizeInBytes = fileSize
             self.logFolder = logFolder
             self.logMetric = .init(
                 unobserved: logMetricId,
@@ -70,7 +88,8 @@ public final class MetricObserver {
                 canBeUpdatedByRemote: false,
                 logFolder: logFolder,
                 encoder: encoder,
-                decoder: decoder)
+                decoder: decoder,
+                fileSize: fileSize)
             // No previous metrics, so observing can't fail
             observe(logMetric)
     }
@@ -89,7 +108,8 @@ public final class MetricObserver {
             id: id,
             observer: self,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
-            name: name, description: description)
+            name: name, description: description,
+            fileSize: maximumFileSizeInBytes)
         observe(metric)
         return metric
     }
