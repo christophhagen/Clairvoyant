@@ -301,22 +301,60 @@ let lastValue = await metric.lastValue()
 
 ## Initial requirements
 
-- Allow publishing of individual metrics
-- Allow different data types: Int, Bool, Double, Enum, and complex objects
-- Use efficient binary encoding
-- Specify read and write access for each property
-- Protect information through access control
-- Allow logging of changed values to disk
-- Allow access to current value and optionally all past values
-- Collect metrics from different sources: Variables, log files, online requests, etc.
-- Provide information about the retrievable parameters
-- General logging of errors
-- Push changed values to different server
+**Allow publishing of individual metrics** *Implemented*
+
+Different metrics can be created, updated, and exposed through a Vapor server.
+
+**Allow different data types: Int, Bool, Double, Enum, and complex objects** *Implemented*
+
+Any Swift type can be used as a metric, as long as it conforms to `MetricValue`. 
+Some standard types have been implemented: `Int`, `Double`, `Bool`, `Enum(UInt8)`, and `ServerStatus`.
+
+**Use efficient binary encoding** *Implemented*
+
+Any binary encoder can be specified for encoding and decoding, as long as it conforms to `BinaryEncoder` and `BinaryDecoder`.
+Timestamps (aka `Double`) must be encoded with a fixed length for the encoding to work.
+Extensions are provided for `CBOR` encoding through `ClairvoyantCBOR`.
+
+**Specify read and write access for each property** *Implemented*
+
+Access control is left to the application, and can be performed individually for each request.
+Some convenience functions are provided to simplify access control through tokens.
+
+**Protect information through access control** *Implemented*
+
+See above.
+
+**Allow logging of changed values to disk** *Implemented*
+
+Values are timestamped and written to log files on disk. 
+Log files are split according to a configurable maximum size.
+
+**Allow access to current value and optionally all past values** *Implemented*
+
+Metrics provide `lastValue()` and `getHistory()` functions to access stored values.
+These can also be accessed through the Vapor web interface.
+
+**Collect metrics from different sources: Variables, log files, online requests, etc.** *Not implemented*
+
+Feeding metric with values is left to the application.
+Additional features may be implemented in time to observe and process log files or perform automatic requests.
+ 
+**Provide information about the retrievable parameters** *Implemented*
+
+`MetricObservers` provide a list of the metrics with basic information (name, description, type) about them.
+
+**General logging of errors** *Implemented*
+
+Each `MetricObserver` has a metric dedicated to logging of internal errors
+
+**Push changed values to different server** *Implemented*
+
+Metrics can be configured with remote observers, were new values are automatically transmitted to.
 
 ## Open tasks
 
-- Allow changing the log file size
-- Push updates to remote server
-- Ensure completeness of log when pulling data from remote metrics
-- Provide values as strings/JSON for web view
+- Persist pending values to remote observers between launches
 - Option to turn of logging to local files for (remote?) metrics
+- Provide values as strings/JSON for web view
+- Add convenience features to observe log files or perform periodic network requests.
