@@ -288,10 +288,15 @@ public actor Metric<T> where T: MetricValue {
 
     // MARK: Pushing to remotes
 
-    // TODO: Persist pending values between launches?
-
     /// The remote observers of the metric, with the pending data points for each
     private var remoteObservers: [RemoteMetricObserver : [Timestamped<T>]] = [:]
+
+    /**
+     Indicate if there are any values not transmitted to remote observers.
+     */
+    func hasPendingUpdatesForRemoteObservers() -> Bool {
+        remoteObservers.values.contains { !$0.isEmpty }
+    }
 
     /**
      Add a remote to receive all updates to the metric.
@@ -304,6 +309,17 @@ public actor Metric<T> where T: MetricValue {
             return
         }
         remoteObservers[remoteObserver] = []
+    }
+
+    /**
+     Try to send all pending values to remote observers.
+     If there are no pending values, then no request is made.
+     */
+    public func pushPendingDataToRemoteObservers() async {
+        guard hasPendingUpdatesForRemoteObservers() else {
+            return
+        }
+        await push([])
     }
 
     private func push(_ value: Timestamped<T>) {
@@ -322,6 +338,9 @@ public actor Metric<T> where T: MetricValue {
     private func push(_ values: [Timestamped<T>]) async {
         await withTaskGroup(of: Void.self) { group in
             for (observer, pending) in remoteObservers {
+                guard !values.isEmpty || !pending.isEmpty else {
+                    continue
+                }
                 group.addTask {
                     await self.push(values: pending + values, to: observer)
                 }
