@@ -1,8 +1,6 @@
 import Foundation
-import CBORCoding
+import Clairvoyant
 import Vapor
-
-private let decoder = CBORDecoder()
 
 extension Request {
 
@@ -16,7 +14,7 @@ extension Request {
         return data
     }
 
-    func decodeBody<T>(as type: T.Type = T.self) throws -> T where T: Decodable {
+    func decodeBody<T>(as type: T.Type = T.self, using decoder: BinaryDecoder) throws -> T where T: Decodable {
         guard let data = body.data?.all() else {
             throw Abort(.badRequest)
         }

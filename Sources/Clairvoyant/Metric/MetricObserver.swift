@@ -1,5 +1,4 @@
 import Foundation
-import CBORCoding
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -65,8 +64,8 @@ public final class MetricObserver {
         logMetricId: String,
         logMetricName: String? = nil,
         logMetricDescription: String? = nil,
-        encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
-        decoder: BinaryDecoder = CBORDecoder(),
+        encoder: BinaryEncoder,
+        decoder: BinaryDecoder,
         fileSize: Int = 10_000_000) {
 
             self.uniqueId = .random()

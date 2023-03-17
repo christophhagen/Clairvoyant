@@ -1,5 +1,4 @@
 import Foundation
-import CBORCoding
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -20,8 +19,8 @@ public actor MetricConsumer {
         url: URL,
         accessProvider: MetricRequestAccessProvider,
         session: URLSession = .shared,
-        encoder: BinaryEncoder = CBOREncoder(dateEncodingStrategy: .secondsSince1970),
-        decoder: BinaryDecoder = CBORDecoder()) {
+        encoder: BinaryEncoder,
+        decoder: BinaryDecoder) {
 
         self.serverUrl = url
         self.accessProvider = accessProvider

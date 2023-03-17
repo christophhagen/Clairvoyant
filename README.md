@@ -11,7 +11,21 @@ This framework intends to provide a very lightweight logging and monitoring poss
 It allows publishing, collecting, and logging time-series data in a very simple way.
 The goal is to provide easy remote access to basic information about running services, as well as provide history data.
 
-It is maybe similiar to approaches like [swift-metrics](https://github.com/apple/swift-metrics), but without running a cumbersome monitoring backend.
+It is maybe similiar to approaches like [swift-metrics](https://github.com/apple/swift-metrics), but without running a cumbersome monitoring backend, and with a bit more flexibility.
+
+### Modules
+
+This package consists of several modules, which separate the logic according to the needed functions.
+
+| Module | Content |
+| --- | --- |
+| Clairvoyant | The main module with metrics and consumers |
+| ClairvoyantVapor | Extensions to expose metrics through a [Vapor](https://vapor.codes) server |
+| ClairvoyantLogging | Use a metrics observer as a backend for [swift-log](https://github.com/apple/swift-log) |
+| ClairvoyantMetrics | Use a metrics observer as a backend for [swift-metrics](https://github.com/apple/swift-metrics) |
+| ClairvoyantCBOR | Extensions to use [CBOR](https://cbor.io) encoding for metrics |
+
+The individual modules are explained in more detail below.
 
 ## Usage
 
@@ -40,6 +54,7 @@ metric.update(123)
 
 The call to `update()` creates a timestamp for the given value, and persists this pair. 
 Internally, metrics are only updated when the value changes, so calling `update()` multiple times with the same value does not unnecessarily increase the size of the log file.
+Datapoints older than the last value are also ignored (only applicable when setting custom timestamps).
 
 It's also possible to get the last value or a history for each metric.
 
@@ -178,19 +193,35 @@ The response is an array of `MetricDescription`, encoded with the binary encoder
 
 #### `/last/<METRIC_ID_HASH>`
 
-Get the last value of the metric. The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters). Authentication of the request depends on the chosen implementation.
+Get the last value of the metric. The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters). Authentication of the `POST` request depends on the chosen implementation.
+The response is a `Timestamped<T>` with the last value of the metric, encoded with the supplied binary encoder. If no value exists yet, then status `410` is returned.
 
 #### `/history/<METRIC_ID_HASH>`
 
-Get the logged values of a metric in a specified time interval. The time interval is provided in the request body as a binary encoding of a `ClosedRange<Date>`. Authentication of the request depends on the chosen implementation.
+Get the logged values of a metric in a specified time interval. 
+The time interval is provided in the `POST` request body as a binary encoding of a `MetricHistoryRequest` containing the start and end dates of the interval, and a maximum count of elements to return.
+The request can be performed chronologically (start < end) or reversed (end > start).
+Authentication of the request depends on the chosen implementation.
+The response is a `[Timestamped<T>]` with the values in the provided range (up to the given limit).
+
+#### `/push/<METRIC_ID_HASH>`
+
+Add values to a metric through the web interface. This function is mostly needed to push metrics to other vapor servers.
+Updating a metric is only allowed if `canBeUpdatedByRemote` is set to `true` when the metric is created.
+The request body of the `POST` request contains a `[Timestamped<T>]` encoded as binary data.
 
 ### Pushing to other servers
 
-**This feature is not implemented yet**
+Metrics can be configured to automatically transmit the logged values to a remote server for monitoring or persistence.
+To configure this feature, one or more `RemoteMetricObserver`s can be added to each metric.
+Whenever a new value is set, then the metric attempts to send all pending updates (including any previously failed values) to the remote observer using the `push` route specified above.
+
+The remote server must have a metric with the same `id` registered with the observer, and the metric must be configured with `canBeUpdatedByRemote = true`.
 
 ### Receiving from other servers
 
-**This feature is not implemented yet**
+To receive a metric pushed from a remote server, configure a metric with `canBeUpdatedByRemote = true`. Any time a new value is received the metric will be updated with this value.
+The last value as well as history data can be accessed as with any other metric.
 
 ### Complex types
 
@@ -288,3 +319,4 @@ let lastValue = await metric.lastValue()
 - Push updates to remote server
 - Ensure completeness of log when pulling data from remote metrics
 - Provide values as strings/JSON for web view
+- Option to turn of logging to local files for (remote?) metrics

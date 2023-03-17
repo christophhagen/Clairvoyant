@@ -1,12 +1,13 @@
 import XCTest
 import Vapor
 @testable import Clairvoyant
+import ClairvoyantCBOR
 import CBORCoding
 
 final class ClairvoyantTests: SelfCleaningTest {
 
     func testCreateObserver() {
-        _ = MetricObserver(logFolder: logFolder, logMetricId: "log")
+        _ = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
     }
 
     func testCreateMetricNoObserver() async throws {
@@ -18,7 +19,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func getIntMetricAndObserver() -> (metric: Metric<Int>, observer: MetricObserver) {
-        let observer = MetricObserver(logFolder: logFolder, logMetricId: "log")
+        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
         let metric: Metric<Int> = observer.addMetric(id: "myInt")
         return (metric, observer)
     }
@@ -28,7 +29,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testCreateMetricBootstrapped() async throws {
-        let observer = MetricObserver(logFolder: logFolder, logMetricId: "log")
+        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
         MetricObserver.standard = observer
         _ = try await Metric<Int>("myInt")
     }
@@ -78,7 +79,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testClientHistoryDecoding() async throws {
-        let observer = MetricObserver(logFolder: logFolder, logMetricId: "test.log")
+        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "test.log")
         MetricObserver.standard = observer
         let metric = try await Metric<Int>("test.int")
 
@@ -92,7 +93,7 @@ final class ClairvoyantTests: SelfCleaningTest {
         let data = await metric.encodedHistoryData(from: start, to: end)
         let decoder = CBORDecoder()
 
-        let client = MetricConsumer(url: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))
+        let client = MetricConsumer(from: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))
         let values: [Int] = try decoder.decode([Timestamped<Int>].self, from: data).map { $0.value }
         XCTAssertEqual(values, input)
 

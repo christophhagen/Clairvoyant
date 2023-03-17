@@ -15,15 +15,20 @@ public final class VaporMetricProvider {
     /// The encoder to use for the response data.
     public let encoder: BinaryEncoder
 
+    /// The encoder to use for the request body decoding.
+    public let decoder: BinaryDecoder
+
     /**
      - Parameter observer: The metric observer to expose through vapor
      - Parameter accessManager: The handler of authentication to access metric data
      - Parameter encoder: The encoder to use for the response data. Defaults to the encoder of the observer
+     - Parameter decoder: The decoder to use for the request body decoding. Defaults to the decoder of the observer
      */
-    public init(observer: MetricObserver, accessManager: MetricRequestAccessManager, encoder: BinaryEncoder? = nil) {
+    public init(observer: MetricObserver, accessManager: MetricRequestAccessManager, encoder: BinaryEncoder? = nil, decoder: BinaryDecoder? = nil) {
         self.accessManager = accessManager
         self.observer = observer
         self.encoder = encoder ?? observer.encoder
+        self.decoder = decoder ?? observer.decoder
     }
 
     func getAccessibleMetric(_ request: Request) throws -> GenericMetric {
@@ -148,7 +153,7 @@ public final class VaporMetricProvider {
             }
 
             let metric = try self.getAccessibleMetric(request)
-            let range = try request.decodeBody(as: MetricHistoryRequest.self)
+            let range = try request.decodeBody(as: MetricHistoryRequest.self, using: self.decoder)
             return await metric.encodedHistoryData(from: range.start, to: range.end, maximumValueCount: range.limit)
         }
     }

@@ -1,5 +1,4 @@
 import Foundation
-import CBORCoding
 
 typealias TimestampedValueData = Data
 

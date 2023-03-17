@@ -1,5 +1,4 @@
 import Foundation
-import CBORCoding
 import Vapor
 import Clairvoyant
 

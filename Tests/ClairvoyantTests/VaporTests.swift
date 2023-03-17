@@ -2,6 +2,7 @@ import XCTest
 import XCTVapor
 import Vapor
 import ClairvoyantVapor
+import ClairvoyantCBOR
 @testable import Clairvoyant
 import CBORCoding
 
@@ -9,7 +10,7 @@ final class VaporTests: SelfCleaningTest {
 
     func testMetricList() async throws {
         let observer = MetricObserver(
-            logFolder: logFolder,
+            logFileFolder: logFolder,
             logMetricId: "log")
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
 
@@ -31,7 +32,7 @@ final class VaporTests: SelfCleaningTest {
 
     func testAllLastValues() async throws {
         let observer = MetricObserver(
-            logFolder: logFolder,
+            logFileFolder: logFolder,
             logMetricId: "log")
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")
@@ -57,7 +58,7 @@ final class VaporTests: SelfCleaningTest {
 
     func testLastValue() async throws {
         let observer = MetricObserver(
-            logFolder: logFolder,
+            logFileFolder: logFolder,
             logMetricId: "log")
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")
@@ -78,7 +79,7 @@ final class VaporTests: SelfCleaningTest {
 
     func testHistory() async throws {
         let observer = MetricObserver(
-            logFolder: logFolder,
+            logFileFolder: logFolder,
             logMetricId: "log")
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")

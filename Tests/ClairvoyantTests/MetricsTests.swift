@@ -3,11 +3,12 @@ import Vapor
 import Metrics
 import Clairvoyant
 import ClairvoyantMetrics
+import ClairvoyantCBOR
 
 final class MetricsTests: SelfCleaningTest {
 
     func testBootstrap() async throws {
-        let observer = MetricObserver(logFolder: logFolder, logMetricId: "observer.log")
+        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "observer.log")
         let metrics = MetricsProvider(observer: observer)
         MetricsSystem.bootstrap(metrics)
 
