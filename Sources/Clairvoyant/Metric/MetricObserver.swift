@@ -78,6 +78,7 @@ public final class MetricObserver {
                 name: logMetricName,
                 description: logMetricDescription,
                 canBeUpdatedByRemote: false,
+                keepsLocalHistoryData: true,
                 logFolder: logFolder,
                 encoder: encoder,
                 decoder: decoder,
@@ -93,13 +94,16 @@ public final class MetricObserver {
      - Parameter id: The id of the metric.
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
+     - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
+     - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Returns: The created metric.
      */
-    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false) -> Metric<T> where T: MetricValue {
+    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true) -> Metric<T> where T: MetricValue {
         let metric = Metric<T>(
             id: id,
             observer: self,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
+            keepsLocalHistoryData: keepsLocalHistoryData,
             name: name, description: description,
             fileSize: maximumFileSizeInBytes)
         observe(metric)

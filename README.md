@@ -355,6 +355,7 @@ Metrics can be configured with remote observers, were new values are automatical
 ## Open tasks
 
 - Persist pending values to remote observers between launches
-- Option to turn of logging to local files for (remote?) metrics
+- Add function to delete old values from logs
+- Add total file size limit to metric (automatically delete oldest files)
 - Provide values as strings/JSON for web view
 - Add convenience features to observe log files or perform periodic network requests.

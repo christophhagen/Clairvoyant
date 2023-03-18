@@ -42,10 +42,24 @@ public actor Metric<T> where T: MetricValue {
         description.canBeUpdatedByRemote
     }
 
+    /**
+     Indicates that the metric writes values to disk locally.
+
+     If this property is `false`, then no data will be kept apart from the last value of the metric.
+     This means that calling `getHistory()` on the metric always returns an empty response.
+
+     This property is useful to create metrics that should only push values to remote observers, where the values are persisted.
+     */
+    public nonisolated var keepsLocalHistoryData: Bool {
+        description.keepsLocalHistoryData
+    }
+
+    /// The unique if of the metric
     public nonisolated var id: MetricId {
         description.id
     }
 
+    /// A human-readable name of the metric
     public nonisolated var name: String? {
         description.name
     }
@@ -74,21 +88,21 @@ public actor Metric<T> where T: MetricValue {
         fileWriter.maximumFileSizeInBytes = bytes
     }
 
-
-
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
+     - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter fileSize: The maximum size of files in bytes
      */
-    init(id: String, observer: MetricObserver, canBeUpdatedByRemote: Bool, name: String?, description: String?, fileSize: Int) {
+    init(id: String, observer: MetricObserver, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
         let description = MetricDescription(
             id: id,
             dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
+            keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
         self.init(description: description,
@@ -112,11 +126,12 @@ public actor Metric<T> where T: MetricValue {
         fileWriter.set(metric: self)
     }
 
-    init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
+    init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
         self.description = .init(
             id: id,
             dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
+            keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
         let idHash = id.hashed()
@@ -133,7 +148,6 @@ public actor Metric<T> where T: MetricValue {
         fileWriter.set(metric: self)
     }
 
-
     /**
      Create a new metric.
      - Parameter id: The unique id of the metric.
@@ -141,9 +155,10 @@ public actor Metric<T> where T: MetricValue {
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
+     - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter fileSize: The maximum size of files in bytes
      */
-    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, fileSize: Int = 10_000_000) async throws {
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) async throws {
         guard let observer = MetricObserver.standard else {
             throw MetricError.noObserver
         }
@@ -151,6 +166,7 @@ public actor Metric<T> where T: MetricValue {
             id: id,
             observer: observer,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
+            keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description,
             fileSize: fileSize)
@@ -248,7 +264,9 @@ public actor Metric<T> where T: MetricValue {
                 return false
             }
         }
-        try fileWriter.write(value)
+        if keepsLocalHistoryData {
+            try fileWriter.write(value)
+        }
         _lastValue = value
         push(value)
         return true
@@ -266,6 +284,7 @@ public actor Metric<T> where T: MetricValue {
     public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<T> {
         let sorted = values.sorted { $0.timestamp }
         var lastValue = lastValue()
+        var valuesToPush: [Timestamped<T>] = []
         for element in sorted {
             if let lastValue {
                 guard element.value != lastValue.value else {
@@ -277,13 +296,17 @@ public actor Metric<T> where T: MetricValue {
                     continue
                 }
             }
-            try fileWriter.writeOnlyToLog(element)
+            if keepsLocalHistoryData {
+                try fileWriter.writeOnlyToLog(element)
+            }
+            valuesToPush.append(element)
             lastValue = element
         }
         _lastValue = lastValue
         if let lastValue {
             _ = try? fileWriter.write(lastValue: lastValue)
         }
+        push(valuesToPush)
     }
 
     // MARK: Pushing to remotes

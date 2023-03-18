@@ -170,6 +170,23 @@ final class ClairvoyantTests: SelfCleaningTest {
         XCTAssertFalse(result2)
     }
 
+    func testNoLocalLogging() async throws {
+        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
+        let metric: Metric<Int> = observer.addMetric(id: "myInt", keepsLocalHistoryData: false)
+
+        let result1 = try await metric.update(1)
+        XCTAssertTrue(result1)
+
+        let result2 = try await metric.update(2)
+        XCTAssertTrue(result2)
+
+        let history = await metric.fullHistory()
+        XCTAssertTrue(history.isEmpty)
+
+        let last = await metric.lastValue()
+        XCTAssertEqual(last?.value, 2)
+    }
+
 }
 
 private extension Date {
