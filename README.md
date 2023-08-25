@@ -43,15 +43,16 @@ import Clairvoyant
 ### Metrics
 
 Let's first create a metric before discussing logging and access control.
+Metrics are written as Swift `Actor`s, so they are thread-safe, but require an asynchronous context.
 
 ```swift
-let metric: Metric<Int> = Metric("myMetric")
+let metric: Metric<Int> = try await Metric("myMetric")
 ```
 
 Once a metric is created, it can be updated with new values:
 
 ```swift
-metric.update(123)
+try await metric.update(123)
 ```
 
 The call to `update()` creates a timestamp for the given value, and persists this pair. 
@@ -61,7 +62,7 @@ Datapoints older than the last value are also ignored (only applicable when sett
 It's also possible to get the last value or a history for each metric.
 
 ```swift
-let last: Timestamped<Int>? = metric.lastValue()
+let last: Timestamped<Int>? = await metric.lastValue()
 ```
 
 The `Timestamped<T>` struct wraps a value with a timestamp to create a point in a time series.
@@ -69,7 +70,7 @@ That makes it possible to order values chronologically, and to obtain values wit
 
 ```swift
 let range = Date().addintTimeInterval(-100)...Date() // last 100 seconds
-let lastValues: [Timestamped<Int>] = try metric.getHistory(in: range)
+let lastValues: [Timestamped<Int>] = try await metric.getHistory(in: range)
 ```
 
 These functions represent the basic interaction with a metric on the creator side.
@@ -90,7 +91,7 @@ The logging metric can later be read in the same way as other metrics.
 It's also possible to add additional log entries.
 
 ```swift
-observer.log("Something happened")
+await observer.log("Something happened")
 ```
 
 The observer is now ready to handle metrics, so the previously created metric can be added to it.
