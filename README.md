@@ -1,4 +1,6 @@
-# Clairvoyant
+<p align="center">
+    <img src="assets/banner.png" width="500" max-width="90%" alt="Clairvoyant" />
+</p>
 
 Clairvoyant is a framework to provide monitoring data for Swift servers, targeted at [Vapor](https://vapor.codes). 
 It enables the specification of different metrics to publish over a web API, where it can be collected by monitoring instances.
