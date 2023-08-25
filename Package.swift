@@ -9,6 +9,18 @@ let package = Package(
         .library(
             name: "Clairvoyant",
             targets: ["Clairvoyant"]),
+        .library(
+            name: "ClairvoyantVapor",
+            targets: ["ClairvoyantVapor"]),
+        .library(
+            name: "ClairvoyantLogging",
+            targets: ["ClairvoyantLogging"]),
+        .library(
+            name: "ClairvoyantMetrics",
+            targets: ["ClairvoyantMetrics"]),
+        .library(
+            name: "ClairvoyantCBOR",
+            targets: ["ClairvoyantCBOR"]),
     ],
     dependencies: [
         .package(url: "https://github.com/christophhagen/CBORCoding", from: "1.0.0"),
