@@ -5,11 +5,11 @@ import FoundationNetworking
 
 public actor MetricConsumer {
 
-    public var serverUrl: URL
+    private(set) public var serverUrl: URL
 
-    public var accessProvider: MetricRequestAccessProvider
+    private(set) public var accessProvider: MetricRequestAccessProvider
 
-    public var session: URLSession
+    private(set) public var session: URLSession
 
     public let decoder: BinaryDecoder
 
@@ -27,6 +27,18 @@ public actor MetricConsumer {
         self.session = session
         self.decoder = decoder
         self.encoder = encoder
+    }
+
+    public func set(serverUrl: URL) {
+        self.serverUrl = serverUrl
+    }
+
+    public func set(accessProvider: MetricRequestAccessProvider) {
+        self.accessProvider = accessProvider
+    }
+
+    public func set(session: URLSession) {
+        self.session = session
     }
 
     public func list() async throws -> [MetricDescription] {
