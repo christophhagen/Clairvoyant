@@ -5,15 +5,15 @@ import FoundationNetworking
 
 public actor MetricConsumer {
 
-    public let serverUrl: URL
+    public var serverUrl: URL
 
-    let accessProvider: MetricRequestAccessProvider
+    public var accessProvider: MetricRequestAccessProvider
 
-    public let session: URLSession
+    public var session: URLSession
 
-    let decoder: BinaryDecoder
+    public let decoder: BinaryDecoder
 
-    let encoder: BinaryEncoder
+    public let encoder: BinaryEncoder
 
     public init(
         url: URL,
