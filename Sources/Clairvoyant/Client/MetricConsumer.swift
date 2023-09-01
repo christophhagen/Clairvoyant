@@ -23,6 +23,9 @@ public actor MetricConsumer {
     /// The decoder used for decoding received data
     public let encoder: BinaryEncoder
 
+    /// Custom mappings to create consumable metrics for types
+    private var customTypeConstructors: [String : (MetricDescription) -> GenericConsumableMetric]
+
     /**
      Create a metric consumer.
 
@@ -44,6 +47,7 @@ public actor MetricConsumer {
         self.session = session
         self.decoder = decoder
         self.encoder = encoder
+        self.customTypeConstructors = [:]
     }
 
     /**
@@ -97,17 +101,56 @@ public actor MetricConsumer {
      - Parameter description: The info about the metric to create.
      - Returns: A consumable metric with the specified info
      */
-    public func metric<T>(from description: MetricDescription) -> ConsumableMetric<T> where T: MetricValue {
+    public func metric<T>(from description: MetricDescription, as type: T.Type = T.self) -> ConsumableMetric<T> where T: MetricValue {
         .init(consumer: self, description: description)
     }
 
     /**
      Get a typed handle to process a specific metric.
-     - Parameter description: The info about the metric to create.
+
+     - Note: To work with custom types, register them using ``register(customType:named:)``.
+     - Parameter info: The info about the metric to create.
      - Returns: A consumable metric with the specified info
+     - Throws: `MetricError.typeMismatch` if the custom type is not registered.
      */
-    public func metric(from description: MetricDescription) -> GenericConsumableMetric {
-        .init(consumer: self, description: description, decoder: decoder)
+    public func genericMetric(from info: MetricDescription) throws -> GenericConsumableMetric {
+        switch info.dataType {
+        case .integer:
+            return metric(from: info, as: Int.self)
+        case .double:
+            return metric(from: info, as: Double.self)
+        case .boolean:
+            return metric(from: info, as: Bool.self)
+        case .string:
+            return metric(from: info, as: String.self)
+        case .data:
+            return metric(from: info, as: Data.self)
+        case .customType(named: let name):
+            guard let closure = customTypeConstructors[name] else {
+                throw MetricError.typeMismatch
+            }
+            return closure(info)
+        case .serverStatus:
+            return metric(from: info, as: ServerStatus.self)
+        }
+    }
+
+    /**
+     Register a custom type.
+
+     Call this function with your custom types so that generic consumable metrics can be created using ``genericMetric(from:)``.
+
+     ```
+     let metricInfo = MetricInfo(id: "my.log", dataType: .custom("MyType"))
+
+     consumer.register(customType: MyType.self, named: "MyType")
+     let myMetric = consumer.genericMetric(from: description)
+     ```
+     */
+    public func register<T>(customType: T.Type, named typeName: String) where T: MetricValue {
+        customTypeConstructors[typeName] = { info in
+            return ConsumableMetric<T>(consumer: self, description: info)
+        }
     }
 
     /**

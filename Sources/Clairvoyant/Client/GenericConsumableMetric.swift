@@ -1,35 +1,31 @@
 import Foundation
 
-public actor GenericConsumableMetric {
+extension ConsumableMetric: GenericConsumableMetric {
 
-    let consumer: MetricConsumer
-
-    public nonisolated let description: MetricDescription
-
-    public nonisolated var id: MetricId {
-        description.id
+    public func lastValue<R>(as type: R.Type) async throws -> Timestamped<R>? where R : MetricValue {
+        guard T.valueType == R.valueType else {
+            throw MetricError.typeMismatch
+        }
+        guard let value = try await self.lastValue() else {
+            return nil
+        }
+        guard let converted = value as? Timestamped<R>? else {
+            throw MetricError.typeMismatch
+        }
+        return converted
     }
 
-    public nonisolated var dataType: MetricType {
-        description.dataType
-    }
-
-    public nonisolated var name: String? {
-        description.name
-    }
-
-    private let decoder: BinaryDecoder
-
-    init(consumer: MetricConsumer, id: MetricId, dataType: MetricType, name: String? = nil, description: String? = nil, decoder: BinaryDecoder) {
-        self.consumer = consumer
-        self.description = .init(id: id, dataType: dataType, name: name, description: description)
-        self.decoder = decoder
-    }
-
-    init(consumer: MetricConsumer, description: MetricDescription, decoder: BinaryDecoder) {
-        self.consumer = consumer
-        self.description = description
-        self.decoder = decoder
+    public func history<R>(in range: ClosedRange<Date>, as type: R.Type) async throws -> [Timestamped<R>] where R: MetricValue {
+        guard T.valueType == R.valueType else {
+            throw MetricError.typeMismatch
+        }
+        let values = try await self.history(in: range)
+        return try values.map {
+            guard let result = $0 as? Timestamped<R> else {
+                throw MetricError.typeMismatch
+            }
+            return result
+        }
     }
 
     public func lastValueData() async throws -> Data? {
@@ -39,25 +35,47 @@ public actor GenericConsumableMetric {
         return data
     }
 
-    public func lastValue() async throws -> (description: String, timestamp: Date)? {
-        guard let data = try await consumer.lastValueData(for: id) else {
+    public func lastValueDescription() async throws -> Timestamped<String>? {
+        guard let value = try await lastValue() else {
             return nil
         }
-        return describe(data, type: dataType)
+        return value.mapValue { "\($0)" }
+    }
+}
+
+extension GenericConsumableMetric {
+
+    public var id: MetricId {
+        description.id
     }
 
-    public func lastValue<T>(as type: T.Type = T.self) async throws -> Timestamped<T>? where T: MetricValue {
-        guard T.valueType == dataType else {
-            throw MetricError.typeMismatch
-        }
-        return try await consumer.lastValue(for: id)
+    public var dataType: MetricType {
+        description.dataType
     }
 
-    public func history<T>(in range: ClosedRange<Date>, as type: T.Type = T.self) async throws -> [Timestamped<T>] where T: MetricValue {
-        try await consumer.history(for: id, in: range)
+    public var name: String? {
+        description.name
     }
+}
 
-    public func history(in range: ClosedRange<Date>) async throws -> [(description: String, timestamp: Date)] {
+public protocol GenericConsumableMetric {
+
+    var consumer: MetricConsumer { get }
+
+    var description: MetricDescription { get }
+
+    func lastValueData() async throws -> Data?
+
+    func lastValueDescription() async throws -> Timestamped<String>?
+
+    func lastValue<R>(as type: R.Type) async throws -> Timestamped<R>? where R: MetricValue
+
+    func history<R>(in range: ClosedRange<Date>, as type: R.Type) async throws -> [Timestamped<R>] where R: MetricValue
+}
+
+/*
+
+    func history(in range: ClosedRange<Date>) async throws -> [(description: String, timestamp: Date)] {
         let data = try await consumer.historyData(for: id, in: range)
         switch dataType {
         case .integer:
@@ -83,7 +101,7 @@ public actor GenericConsumableMetric {
         }
     }
 
-    func decodeTimestampedArray<T>(_ data: Data, type: T.Type = T.self) throws -> [(description: String, timestamp: Date)] where T: Decodable {
+    private func decodeTimestampedArray<T>(_ data: Data, type: T.Type = T.self) throws -> [(description: String, timestamp: Date)] where T: Decodable {
         try decoder.decode([Timestamped<T>].self, from: data).map { element in
             (description: "\(element.value)", timestamp: element.timestamp)
         }
@@ -133,3 +151,4 @@ public actor GenericConsumableMetric {
         }
     }
 }
+*/
