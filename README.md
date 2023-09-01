@@ -116,7 +116,7 @@ let metric = Metric("metric", containing: Int.self) // Automatically added to `o
 ## Exposing metrics with Vapor
 
 Logging values to disk is great, but the data should also be available for inspection and monitoring.
-Clairvoyant provides a separate module `ClairvoyantVapor` to integrate metric access into Vapor servers.
+Clairvoyant provides a separate package [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) to integrate metric access into Vapor servers.
 Each `MetricObserver` can be exposed separately on a subpath of the server.
 
 ```swift
@@ -233,8 +233,8 @@ The last value as well as history data can be accessed as with any other metric.
 
 ## Usage with `swift-log`
 
-Clairvoyant can be used as a logging backend for `swift-log`, so that all logs are made available as `String` metrics.
-To forward logs as metrics, first import the required module:
+Clairvoyant can be used as a logging backend for [swift-log](https://github.com/apple/swift-log), so that all logs are made available as `String` metrics.
+To forward logs as metrics, add a dependency for [ClairvoyantLogging](https://github.com/christophhagen/ClairvoyantLogging) and import the required module:
 
 ```swift
 import Clairvoyant
@@ -274,7 +274,7 @@ logging.outputFormat = .full
 Clairvoyant can be used as a metrics backend for [`swift-metrics`](https://github.com/apple/swift-metrics), to store metrics and serve them over a web api.
 Each `Counter`, `Recorder`, `Gauge` or `Timer` is forwarded to a metric with the same `label` (`id`). While counters become `Metric<Int>`, all others become `Metric<Double>` (be aware of the inaccuracy of `Double` when using `Recorder.record(Int64)`).
 
-To use a `MetricObserver` as a metrics backend, first import the module:
+To use a `MetricObserver` as a metrics backend, add a dependency for [ClairvoyantMetrics](https://github.com/christophhagen/ClairvoyantMetrics) and import the module:
 
 ```swift
 import Clairvoyant
