@@ -1,9 +1,10 @@
 import XCTest
 import Vapor
 import Metrics
-import Clairvoyant
+@testable import Clairvoyant
 import ClairvoyantMetrics
 import ClairvoyantCBOR
+import CBORCoding
 
 final class MetricsTests: SelfCleaningTest {
 
@@ -31,5 +32,12 @@ final class MetricsTests: SelfCleaningTest {
         let history = await metric.fullHistory()
         XCTAssertEqual(history.count, 1)
         XCTAssertEqual(history.first?.value ?? 0, result)
+    }
+
+    func testDecodeAnyTimestamped() throws {
+        let value = Timestamped(value: 123)
+        let encoded = try CBOREncoder(dateEncodingStrategy: .secondsSince1970).encode(value)
+        let decoded: AnyTimestamped = try CBORDecoder().decode(from: encoded)
+        XCTAssertEqual(value.timestamp.timeIntervalSince1970, decoded.timestamp.timeIntervalSince1970)
     }
 }
