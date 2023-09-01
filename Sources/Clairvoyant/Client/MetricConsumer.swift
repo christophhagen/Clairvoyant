@@ -62,6 +62,11 @@ public actor MetricConsumer {
         }
     }
 
+    public func lastValueDataForAllMetrics() async throws -> [MetricIdHash : Data] {
+        let data = try await post(path: "last/all")
+        return try decode(from: data)
+    }
+
     public func lastValue<T>(for metric: MetricId, type: T.Type = T.self) async throws -> Timestamped<T>? where T: MetricValue {
         guard let data = try await lastValueData(for: metric) else {
             return nil
