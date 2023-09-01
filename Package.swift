@@ -12,12 +12,8 @@ let package = Package(
         .library(
             name: "ClairvoyantVapor",
             targets: ["ClairvoyantVapor"]),
-        .library(
-            name: "ClairvoyantLogging",
-            targets: ["ClairvoyantLogging"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
     ],
@@ -33,19 +29,12 @@ let package = Package(
                 .target(name: "Clairvoyant"),
                 .product(name: "Vapor", package: "vapor"),
             ]),
-        .target(
-            name: "ClairvoyantLogging",
-            dependencies: [
-                .target(name: "Clairvoyant"),
-                .product(name: "Logging", package: "swift-log"),
-            ]),
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
                 .product(name: "XCTVapor", package: "vapor"),
                 "Clairvoyant",
                 "ClairvoyantVapor",
-                "ClairvoyantLogging",
             ]),
     ]
 )
