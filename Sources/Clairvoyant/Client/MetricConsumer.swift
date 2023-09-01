@@ -3,18 +3,35 @@ import Foundation
 import FoundationNetworking
 #endif
 
+/**
+ The main connection to a metric server.
+ */
 public actor MetricConsumer {
 
+    /// The url to the server where the metrics are exposed
     private(set) public var serverUrl: URL
 
+    /// The provider of access tokens to get metrics
     private(set) public var accessProvider: MetricRequestAccessProvider
 
+    /// The url session used for requests
     private(set) public var session: URLSession
 
+    /// The encoder used for encoding outgoing data
     public let decoder: BinaryDecoder
 
+    /// The decoder used for decoding received data
     public let encoder: BinaryEncoder
 
+    /**
+     Create a metric consumer.
+
+     - Parameter url: The url to the server where the metrics are exposed
+     - Parameter accessProvider: The provider of access tokens to get metrics
+     - Parameter session: The url session to use for the requests
+     - Parameter encoder: The encoder to use for encoding outgoing data
+     - Parameter decoder: The decoder to decode received data
+     */
     public init(
         url: URL,
         accessProvider: MetricRequestAccessProvider,
@@ -29,31 +46,73 @@ public actor MetricConsumer {
         self.encoder = encoder
     }
 
+    /**
+     Set the url to the server.
+     - Parameter url: The url of the server
+     */
     public func set(serverUrl: URL) {
         self.serverUrl = serverUrl
     }
 
+    /**
+     Set the access provider.
+     - Parameter accessProvider: The provider to handle access control
+     */
     public func set(accessProvider: MetricRequestAccessProvider) {
         self.accessProvider = accessProvider
     }
 
+    /**
+     Set the session to use for requests.
+     - Parameter session: The new session to use for the requests
+     - Note: Requests in progress will finish with the old session.
+     */
     public func set(session: URLSession) {
         self.session = session
     }
 
+    /**
+     Get a list of all metrics available on the server.
+     - Returns: A list of available metrics
+     - Throws: `MetricError` errors, as well as errors from the decoder
+     */
     public func list() async throws -> [MetricDescription] {
         let data = try await post(path: "list")
         return try decode(from: data)
     }
 
+    /**
+     Get a typed handle to process a specific metric.
+     - Parameter id: The id of the metric
+     - Parameter name: The optional name of the metric
+     - Parameter description: A textual description of the metric
+     - Returns: A consumable metric of the specified type.
+     */
     public func metric<T>(id: MetricId, name: String? = nil, description: String? = nil) -> ConsumableMetric<T> where T: MetricValue {
         .init(consumer: self, id: id, name: name, description: description)
     }
 
+    /**
+     Get a typed handle to process a specific metric.
+     - Parameter description: The info about the metric to create.
+     - Returns: A consumable metric with the specified info
+     */
+    public func metric<T>(from description: MetricDescription) -> ConsumableMetric<T> where T: MetricValue {
+        .init(consumer: self, description: description)
+    }
+
+    /**
+     Get a typed handle to process a specific metric.
+     - Parameter description: The info about the metric to create.
+     - Returns: A consumable metric with the specified info
+     */
     public func metric(from description: MetricDescription) -> GenericConsumableMetric {
         .init(consumer: self, description: description, decoder: decoder)
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     func lastValueData(for metric: MetricId) async throws -> Data? {
         do {
             return try await post(path: "last/\(metric.hashed())")
@@ -67,6 +126,9 @@ public actor MetricConsumer {
         return try decode(from: data)
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     public func lastValue<T>(for metric: MetricId, type: T.Type = T.self) async throws -> Timestamped<T>? where T: MetricValue {
         guard let data = try await lastValueData(for: metric) else {
             return nil
@@ -78,17 +140,26 @@ public actor MetricConsumer {
         }
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     func historyData(for metric: MetricId, in range: ClosedRange<Date>) async throws -> Data {
         let request = MetricHistoryRequest(range)
         let body = try encode(request)
         return try await post(path: "history/\(metric.hashed())", body: body)
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     public func history<T>(for metric: MetricId, in range: ClosedRange<Date>, type: T.Type = T.self) async throws -> [Timestamped<T>] where T: MetricValue {
         let data = try await historyData(for: metric, in: range)
         return try decode(from: data)
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     private func post(path: String, body: Data? = nil) async throws -> Data {
         let url = serverUrl.appendingPathComponent(path)
         var request = URLRequest(url: url)
@@ -114,6 +185,9 @@ public actor MetricConsumer {
         }
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     private func decode<T>(_ type: T.Type = T.self, from data: Data) throws -> T where T: Decodable {
         do {
             return try decoder.decode(type, from: data)
@@ -122,6 +196,9 @@ public actor MetricConsumer {
         }
     }
 
+    /**
+     - Throws: `MetricError`
+     */
     private func encode<T>(_ value: T) throws -> Data where T: Encodable {
         do {
             return try encoder.encode(value)

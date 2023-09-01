@@ -18,8 +18,6 @@ public actor GenericConsumableMetric {
         description.name
     }
 
-    private let timestampLength = 9
-
     private let decoder: BinaryDecoder
 
     init(consumer: MetricConsumer, id: MetricId, dataType: MetricType, name: String? = nil, description: String? = nil, decoder: BinaryDecoder) {
