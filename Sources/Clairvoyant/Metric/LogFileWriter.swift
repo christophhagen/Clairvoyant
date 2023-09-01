@@ -7,6 +7,11 @@ final class LogFileWriter<T> where T: MetricValue {
     var maximumFileSizeInBytes: Int
 
     private let byteCountLength = 2
+
+    private let timestampLength = Double.encodedLength
+
+    /// The number of bytes to skip for the header (containing number of bytes and timestamp)
+    private let headerByteCount = 2 + Double.encodedLength
     
     let metricId: MetricId
     
@@ -255,13 +260,7 @@ final class LogFileWriter<T> where T: MetricValue {
             throw MetricError.failedToEncode
         }
 
-        let timestampedData: Data
-        do {
-            timestampedData = try encoder.encode(value.timestamp.timeIntervalSince1970)
-        } catch {
-            logError("Failed to encode timestamp: \(error)")
-            throw MetricError.failedToEncode
-        }
+        let timestampedData = value.timestamp.timeIntervalSince1970.toData()
         let count = timestampedData.count + valueData.count
         return UInt16(count).toData() + timestampedData + valueData
     }
@@ -439,10 +438,10 @@ final class LogFileWriter<T> where T: MetricValue {
             return []
         }
         do {
-            let skippedBytes = byteCountLength + decoder.encodedTimestampLength
             return try extractElements(from: data, file: url.lastPathComponent)
                 .map {
-                    let value = try decoder.decode(T.self, from: $0.data.advanced(by: skippedBytes))
+                    let valueData = $0.data.advanced(by: headerByteCount)
+                    let value = try decoder.decode(T.self, from: valueData)
                     return .init(value: value, timestamp: $0.date)
                 }
         } catch {
@@ -483,18 +482,12 @@ final class LogFileWriter<T> where T: MetricValue {
                 logError("File \(file): Needed \(byteCountLength + Int(byteCount)) for timestamped value, has \(data.endIndex - startIndexOfTimestamp)")
                 break
             }
-            guard byteCount >= decoder.encodedTimestampLength else {
-                logError("File \(file): Only \(byteCount) bytes, needed \(decoder.encodedTimestampLength) timestamp")
+            guard byteCount >= timestampLength else {
+                logError("File \(file): Only \(byteCount) bytes, needed \(timestampLength) for timestamp")
                 break
             }
-            let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+decoder.encodedTimestampLength]
-            let timestamp: TimeInterval
-            do {
-                timestamp = try decoder.decode(Double.self, from: timestampData)
-            } catch {
-                logError("File \(file): Failed to decode timestamp from \(timestampData): \(error)")
-                break
-            }
+            let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+timestampLength]
+            let timestamp = Double(fromData: timestampData)!
             let date = Date(timeIntervalSince1970: timestamp)
             let elementData = data[currentIndex..<nextIndex]
             result.append((date, elementData))

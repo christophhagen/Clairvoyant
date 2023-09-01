@@ -2,23 +2,23 @@ import XCTest
 import XCTVapor
 import Vapor
 import ClairvoyantVapor
-import ClairvoyantCBOR
 @testable import Clairvoyant
-import CBORCoding
 
 final class VaporTests: SelfCleaningTest {
 
     func testMetricList() async throws {
         let observer = MetricObserver(
-            logFileFolder: logFolder,
-            logMetricId: "log")
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
 
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
 
-        let decoder = CBORDecoder()
+        let decoder = JSONDecoder()
 
         try app.test(.POST, "metrics/list", headers: ["token" : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
@@ -32,15 +32,17 @@ final class VaporTests: SelfCleaningTest {
 
     func testAllLastValues() async throws {
         let observer = MetricObserver(
-            logFileFolder: logFolder,
-            logMetricId: "log")
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
 
-        let decoder = CBORDecoder()
+        let decoder = JSONDecoder()
 
         try app.test(.POST, "metrics/last/all", headers: ["token" : ""], afterResponse: { res in
             XCTAssertEqual(res.status, .ok)
@@ -58,15 +60,17 @@ final class VaporTests: SelfCleaningTest {
 
     func testLastValue() async throws {
         let observer = MetricObserver(
-            logFileFolder: logFolder,
-            logMetricId: "log")
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
 
-        let decoder = CBORDecoder()
+        let decoder = JSONDecoder()
         let hash = "log".hashed()
 
         try app.test(.POST, "metrics/last/\(hash)", headers: ["token" : ""], afterResponse: { res in
@@ -79,18 +83,22 @@ final class VaporTests: SelfCleaningTest {
 
     func testHistory() async throws {
         let observer = MetricObserver(
-            logFileFolder: logFolder,
-            logMetricId: "log")
+            logFolder: logFolder,
+            logMetricId: "log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
         observer.log("test")
         let app = Application(.testing)
         defer { app.shutdown() }
         provider.registerRoutes(app)
 
-        let decoder = CBORDecoder()
+        let decoder = JSONDecoder()
         let hash = "log".hashed()
         let request = MetricHistoryRequest(start: .distantPast, end: .distantFuture)
-        let body = try CBOREncoder(dateEncodingStrategy: .secondsSince1970).encode(request)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let body = try encoder.encode(request)
 
         try app.test(.POST, "metrics/history/\(hash)",
                      headers: ["token" : ""],

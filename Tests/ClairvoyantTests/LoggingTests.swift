@@ -3,12 +3,15 @@ import Vapor
 import Logging
 import Clairvoyant
 import ClairvoyantLogging
-import ClairvoyantCBOR
 
 final class LoggingTests: SelfCleaningTest {
 
     func testBootstrap() async throws {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "observer.log")
+        let observer = MetricObserver(
+            logFolder: logFolder,
+            logMetricId: "observer.log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let logging = MetricLogging(observer: observer)
         LoggingSystem.bootstrap(logging.backend)
 

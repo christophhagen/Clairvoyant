@@ -12,19 +12,6 @@ public struct Timestamped<Value> {
         self.timestamp = timestamp
         self.value = value
     }
-
-    static func decode(from data: TimestampedValueData, using decoder: BinaryDecoder) throws -> Timestamped<Value> where Value: Decodable {
-        let timestampData = data.prefix(decoder.encodedTimestampLength)
-        let timestamp = try decoder.decode(TimeInterval.self, from: timestampData)
-        let value = try decoder.decode(Value.self, from: data.advanced(by: decoder.encodedTimestampLength))
-        return .init(value: value, timestamp: .init(timeIntervalSince1970: timestamp))
-    }
-
-    func encode(using encoder: BinaryEncoder) throws -> TimestampedValueData where Value: Encodable {
-        let data = try encoder.encode(value)
-        let timestampData = try encoder.encode(timestamp.timeIntervalSince1970)
-        return timestampData + data
-    }
 }
 
 extension Timestamped: Encodable where Value: Encodable {

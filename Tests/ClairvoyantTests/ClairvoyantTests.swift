@@ -1,13 +1,19 @@
 import XCTest
 import Vapor
 @testable import Clairvoyant
-import ClairvoyantCBOR
-import CBORCoding
 
 final class ClairvoyantTests: SelfCleaningTest {
 
+    private func createObserver(logId: String = "log") -> MetricObserver {
+        MetricObserver(
+            logFolder: logFolder,
+            logMetricId: logId,
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
+    }
+
     func testCreateObserver() {
-        _ = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
+        _ = createObserver()
     }
 
     func testCreateMetricNoObserver() async throws {
@@ -19,7 +25,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func getIntMetricAndObserver() -> (metric: Metric<Int>, observer: MetricObserver) {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
+        let observer = createObserver()
         let metric: Metric<Int> = observer.addMetric(id: "myInt")
         return (metric, observer)
     }
@@ -29,7 +35,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testCreateMetricBootstrapped() async throws {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
+        let observer = createObserver()
         MetricObserver.standard = observer
         _ = try await Metric<Int>("myInt")
     }
@@ -79,7 +85,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testClientHistoryDecoding() async throws {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "test.log")
+        let observer = createObserver(logId: "test.log")
         MetricObserver.standard = observer
         let metric = try await Metric<Int>("test.int")
 
@@ -91,9 +97,13 @@ final class ClairvoyantTests: SelfCleaningTest {
 
         let end = Date()
         let data = await metric.encodedHistoryData(from: start, to: end)
-        let decoder = CBORDecoder()
+        let decoder = JSONDecoder()
 
-        let client = MetricConsumer(from: URL(fileURLWithPath: ""), accessProvider: MetricAccessToken(accessToken: Data()))
+        let client = MetricConsumer(
+            url: URL(fileURLWithPath: ""),
+            accessProvider: MetricAccessToken(accessToken: Data()),
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let values: [Int] = try decoder.decode([Timestamped<Int>].self, from: data).map { $0.value }
         XCTAssertEqual(values, input)
 
@@ -171,7 +181,7 @@ final class ClairvoyantTests: SelfCleaningTest {
     }
 
     func testNoLocalLogging() async throws {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "log")
+        let observer = createObserver()
         let metric: Metric<Int> = observer.addMetric(id: "myInt", keepsLocalHistoryData: false)
 
         let result1 = try await metric.update(1)

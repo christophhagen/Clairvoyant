@@ -3,13 +3,25 @@ import Vapor
 import Metrics
 @testable import Clairvoyant
 import ClairvoyantMetrics
-import ClairvoyantCBOR
-import CBORCoding
 
 final class MetricsTests: SelfCleaningTest {
 
+    func testDoubleEncoding() {
+        let value = 3.14
+        let encoded = value.toData()
+        guard let decoded = Double(fromData: encoded) else {
+            XCTFail("Failed to decode double (\(encoded.count) bytes)")
+            return
+        }
+        XCTAssertEqual(value, decoded)
+    }
+
     func testBootstrap() async throws {
-        let observer = MetricObserver(logFileFolder: logFolder, logMetricId: "observer.log")
+        let observer = MetricObserver(
+            logFolder: logFolder,
+            logMetricId: "observer.log",
+            encoder: JSONEncoder(),
+            decoder: JSONDecoder())
         let metrics = MetricsProvider(observer: observer)
         MetricsSystem.bootstrap(metrics)
 
@@ -34,10 +46,25 @@ final class MetricsTests: SelfCleaningTest {
         XCTAssertEqual(history.first?.value ?? 0, result)
     }
 
+    func testEncodeTimestamped() throws {
+        try encode(123)
+        try encode(3.14)
+        try encode("test")
+    }
+
+    private func encode<T>(_ value: T) throws where T: Codable, T: Equatable {
+        let timestamped = Timestamped(value: value)
+        let encoded = try JSONEncoder().encode(timestamped)
+        let decoded: Timestamped<T> = try JSONDecoder().decode(from: encoded)
+        XCTAssertEqual(timestamped.timestamp, decoded.timestamp)
+        XCTAssertEqual(value, decoded.value)
+    }
+
     func testDecodeAnyTimestamped() throws {
         let value = Timestamped(value: 123)
-        let encoded = try CBOREncoder(dateEncodingStrategy: .secondsSince1970).encode(value)
-        let decoded: AnyTimestamped = try CBORDecoder().decode(from: encoded)
-        XCTAssertEqual(value.timestamp.timeIntervalSince1970, decoded.timestamp.timeIntervalSince1970)
+        let encoded = try JSONEncoder().encode(value)
+        
+        let decoded: AnyTimestamped = try JSONDecoder().decode(from: encoded)
+        XCTAssertEqual(value.timestamp, decoded.timestamp)
     }
 }
