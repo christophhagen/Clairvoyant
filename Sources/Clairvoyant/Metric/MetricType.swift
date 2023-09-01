@@ -6,7 +6,6 @@ public enum MetricType {
     case boolean
     case string
     case data
-    case enumeration
     case customType(named: String)
     case serverStatus
     //case httpStatus
@@ -23,8 +22,6 @@ public enum MetricType {
             return "String"
         case .data:
             return "Data"
-        case .enumeration:
-            return "Enum"
         case .customType(let name):
             return name
         case .serverStatus:
@@ -41,7 +38,6 @@ public enum MetricType {
         case "Bool": self = .boolean
         case "String": self = .string
         case "Data": self = .data
-        case "Enum": self = .enumeration
         case "Status": self = .serverStatus
         // case "HTTP Status": self = .httpStatus
         default:
@@ -62,7 +58,7 @@ public enum MetricType {
             return String.self
         case .data:
             return Data.self
-        case .enumeration, .customType:
+        case .customType:
             return nil
         case .serverStatus:
             return ServerStatus.self
