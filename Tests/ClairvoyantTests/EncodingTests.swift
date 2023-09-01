@@ -1,6 +1,5 @@
 import XCTest
 import Vapor
-import Metrics
 @testable import Clairvoyant
 
 final class EncodingTests: XCTestCase {

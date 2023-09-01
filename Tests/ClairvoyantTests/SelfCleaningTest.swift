@@ -5,7 +5,7 @@ import Clairvoyant
 class SelfCleaningTest: XCTestCase {
 
     var temporaryDirectory: URL {
-        if #available(macOS 13.0, *) {
+        if #available(macOS 13.0, iOS 16.0, watchOS 9.0, *) {
             return URL.temporaryDirectory
         } else {
             // Fallback on earlier versions
