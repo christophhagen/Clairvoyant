@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "Clairvoyant",
-    platforms: [.macOS(.v12), .iOS(.v14)],
+    platforms: [.macOS(.v12), .iOS(.v14), .watchOS(.v9)],
     products: [
         .library(
             name: "Clairvoyant",
