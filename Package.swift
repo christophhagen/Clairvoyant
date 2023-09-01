@@ -18,12 +18,8 @@ let package = Package(
         .library(
             name: "ClairvoyantMetrics",
             targets: ["ClairvoyantMetrics"]),
-        .library(
-            name: "ClairvoyantCBOR",
-            targets: ["ClairvoyantCBOR"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/christophhagen/CBORCoding", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.3.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0"),
@@ -53,12 +49,6 @@ let package = Package(
                 .target(name: "Clairvoyant"),
                 .product(name: "Metrics", package: "swift-metrics"),
             ]),
-        .target(
-            name: "ClairvoyantCBOR",
-            dependencies: [
-                .target(name: "Clairvoyant"),
-                .product(name: "CBORCoding", package: "CBORCoding"),
-            ]),
         .testTarget(
             name: "ClairvoyantTests",
             dependencies: [
@@ -67,7 +57,6 @@ let package = Package(
                 "ClairvoyantVapor",
                 "ClairvoyantLogging",
                 "ClairvoyantMetrics",
-                "ClairvoyantCBOR",
             ]),
     ]
 )

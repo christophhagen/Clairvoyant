@@ -15,19 +15,20 @@ The goal is to provide easy remote access to basic information about running ser
 
 It is maybe similiar to approaches like [swift-metrics](https://github.com/apple/swift-metrics), but without running a cumbersome monitoring backend, and with a bit more flexibility.
 
-### Modules
+### Packages
 
-This package consists of several modules, which separate the logic according to the needed functions.
+This package is part of a larger collection of Swift packages, which separate the logic according to the needed functions.
 
 | Module | Content |
 | --- | --- |
 | Clairvoyant | The main module with metrics and consumers |
-| ClairvoyantVapor | Extensions to expose metrics through a [Vapor](https://vapor.codes) server |
-| ClairvoyantLogging | Use a metrics observer as a backend for [swift-log](https://github.com/apple/swift-log) |
-| ClairvoyantMetrics | Use a metrics observer as a backend for [swift-metrics](https://github.com/apple/swift-metrics) |
-| ClairvoyantCBOR | Extensions to use [CBOR](https://cbor.io) encoding for metrics |
+| [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) | Extensions to expose metrics through a [Vapor](https://vapor.codes) server |
+| [ClairvoyantLogging](https://github.com/christophhagen/ClairvoyantLogging) | Use a metrics observer as a backend for [swift-log](https://github.com/apple/swift-log) |
+| [ClairvoyantMetrics](https://github.com/christophhagen/ClairvoyantMetrics) | Use a metrics observer as a backend for [swift-metrics](https://github.com/apple/swift-metrics) |
+| [ClairvoyantCBOR](https://github.com/christophhagen/ClairvoyantCBOR) | Extensions to use [CBOR](https://cbor.io) encoding for metrics |
+| [ClairvoyantBinaryCodable](https://github.com/christophhagen/ClairvoyantBinaryCodable) | Extensions to use [BinaryCodable](https://github.com/christophhagen/BinaryCodable) encoding for metrics |
 
-The individual modules are explained in more detail below.
+The individual packages are explained in more detail below.
 
 ## Usage
 
@@ -316,8 +317,11 @@ Some standard types have been implemented: `Int`, `Double`, `Bool`, `Enum(UInt8)
 **Use efficient binary encoding** *Implemented*
 
 Any binary encoder can be specified for encoding and decoding, as long as it conforms to `BinaryEncoder` and `BinaryDecoder`.
-Timestamps (aka `Double`) must be encoded with a fixed length for the encoding to work.
-Extensions are provided for `CBOR` encoding through `ClairvoyantCBOR`.
+The native types for JSON (`JSONEncoder` and `JSONDecoder`) and Property Lists (`PropertyListEncoder` and `PropertyListDecoder`) work out of the box.
+There are additional packages which can be included for more efficient binary encoders:
+
+To use [CBOR](http://cbor.io), include the [ClairvoyantCBOR](https://github.com/christophhagen.de/ClairvoyantCBOR) package.
+To use [BinaryCodable](https://github.com/christophhagen.de/BinaryCodable), include [ClairvoyantBinaryCodable](https://github.com/christophhagen.de/ClairvoyantBinaryCodable).
 
 **Specify read and write access for each property** *Implemented*
 
