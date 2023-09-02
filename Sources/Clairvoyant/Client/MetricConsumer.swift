@@ -132,6 +132,8 @@ public actor MetricConsumer {
             return closure(info)
         case .serverStatus:
             return metric(from: info, as: ServerStatus.self)
+        case .httpStatus:
+            return metric(from: info, as: HTTPStatusCode.self)
         }
     }
 

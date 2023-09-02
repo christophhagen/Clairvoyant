@@ -8,7 +8,7 @@ public enum MetricType {
     case data
     case customType(named: String)
     case serverStatus
-    //case httpStatus
+    case httpStatus
 
     var stringDescription: String {
         switch self {
@@ -26,8 +26,8 @@ public enum MetricType {
             return name
         case .serverStatus:
             return "Status"
-        //case .httpStatus:
-        //    return "HTTP Status"
+        case .httpStatus:
+            return "HTTP Status"
         }
     }
 
@@ -39,7 +39,7 @@ public enum MetricType {
         case "String": self = .string
         case "Data": self = .data
         case "Status": self = .serverStatus
-        // case "HTTP Status": self = .httpStatus
+        case "HTTP Status": self = .httpStatus
         default:
             self = .customType(named: stringDescription)
         }
@@ -62,6 +62,8 @@ public enum MetricType {
             return nil
         case .serverStatus:
             return ServerStatus.self
+        case .httpStatus:
+            return HTTPStatusCode.self
         }
     }
 }
