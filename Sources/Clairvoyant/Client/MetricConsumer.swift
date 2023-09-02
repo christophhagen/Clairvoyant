@@ -26,6 +26,9 @@ public actor MetricConsumer {
     /// Custom mappings to create consumable metrics for types
     private var customTypeConstructors: [String : (MetricDescription) -> GenericConsumableMetric]
 
+    /// Custom mappings to create consumable metrics for types
+    private var customTypeDescriptors: [String : (Data) -> Timestamped<String>]
+
     /**
      Create a metric consumer.
 
@@ -42,12 +45,13 @@ public actor MetricConsumer {
         encoder: BinaryEncoder,
         decoder: BinaryDecoder) {
 
-        self.serverUrl = url
-        self.accessProvider = accessProvider
-        self.session = session
-        self.decoder = decoder
-        self.encoder = encoder
-        self.customTypeConstructors = [:]
+            self.serverUrl = url
+            self.accessProvider = accessProvider
+            self.session = session
+            self.decoder = decoder
+            self.encoder = encoder
+            self.customTypeConstructors = [:]
+            self.customTypeDescriptors = [:]
     }
 
     /**
@@ -153,6 +157,12 @@ public actor MetricConsumer {
         customTypeConstructors[typeName] = { info in
             return ConsumableMetric<T>(consumer: self, description: info)
         }
+        customTypeDescriptors[typeName] = { [weak self] data in
+            guard let self else {
+                return .init(value: "Internal error")
+            }
+            return self.describe(data, as: T.self)
+        }
     }
 
     /**
@@ -166,9 +176,54 @@ public actor MetricConsumer {
         }
     }
 
+    /**
+     Get the last value data for all metrics of the server.
+     - Returns: A dictionary with the metric ID hash and the metric data
+     - Note: If no last value exists for a metric, then the dictionary key will be missing.
+     */
     public func lastValueDataForAllMetrics() async throws -> [MetricIdHash : Data] {
         let data = try await post(path: "last/all")
         return try decode(from: data)
+    }
+
+    public func lastValueDescriptionForAllMetrics() async throws -> [MetricIdHash : Timestamped<String>] {
+        let data = try await post(path: "extended/all")
+        let values = try decode([ExtendedMetricInfo].self, from: data)
+        return values.reduce(into: [:]) {
+            guard let data = $1.lastValueData else { return }
+            $0[$1.info.id] = describe(data, ofType: $1.info.dataType)
+        }
+    }
+
+    public func describe(_ data: Data, ofType dataType: MetricType) -> Timestamped<String> {
+        switch dataType {
+        case .integer:
+            return describe(data, as: Int.self)
+        case .double:
+            return describe(data, as: Double.self)
+        case .boolean:
+            return describe(data, as: Bool.self)
+        case .string:
+            return describe(data, as: String.self)
+        case .data:
+            return describe(data, as: Data.self)
+        case .customType(named: let name):
+            guard let closure = customTypeDescriptors[name] else {
+                return .init(value: "Unknown type")
+            }
+            return closure(data)
+        case .serverStatus:
+            return describe(data, as: ServerStatus.self)
+        case .httpStatus:
+            return describe(data, as: HTTPStatusCode.self)
+        }
+    }
+
+    nonisolated func describe<T>(_ data: Data, as type: T.Type) -> Timestamped<String> where T: MetricValue {
+        guard let decoded = try? decoder.decode(Timestamped<T>.self, from: data) else {
+            return .init(value: "Decoding error")
+        }
+        return decoded.mapValue { "\($0)" }
     }
 
     /**

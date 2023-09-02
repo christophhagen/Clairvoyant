@@ -195,6 +195,13 @@ public final class MetricObserver {
         observedMetrics.values.map { $0.description }
     }
 
+    public func getExtendedDataOfAllRecordedMetrics() async -> [ExtendedMetricInfo] {
+        await observedMetrics.values.asyncMap { metric in
+            let lastValue = await metric.lastValueData()
+            return ExtendedMetricInfo(info: metric.description, lastValueData: lastValue)
+        }
+    }
+
     public func getLastValuesOfAllMetrics() async -> [String : Data] {
         var result = [String : Data]()
         for (id, metric) in observedMetrics {

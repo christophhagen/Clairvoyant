@@ -127,17 +127,8 @@ final class ClairvoyantTests: XCTestCase {
         let data = await metric.encodedHistoryData(from: start, to: end)
         let decoder = JSONDecoder()
 
-        let client = MetricConsumer(
-            url: URL(fileURLWithPath: ""),
-            accessProvider: MetricAccessToken(accessToken: Data()),
-            encoder: JSONEncoder(),
-            decoder: JSONDecoder())
         let values: [Int] = try decoder.decode([Timestamped<Int>].self, from: data).map { $0.value }
         XCTAssertEqual(values, input)
-
-        let generic = await client.metric(from: metric.description)
-        let genericValues = try await generic.decodeTimestampedArray(data, type: Int.self).map { $0.description }
-        XCTAssertEqual(genericValues, input.map { "\($0)"})
     }
 
     func testMultipleLogFiles() async throws {

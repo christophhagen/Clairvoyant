@@ -56,3 +56,50 @@ public actor ConsumableMetric<T> where T: MetricValue {
         try await consumer.history(for: id, in: range)
     }
 }
+
+extension ConsumableMetric: GenericConsumableMetric {
+
+    public func lastValue<R>(as type: R.Type) async throws -> Timestamped<R>? where R : MetricValue {
+        guard T.valueType == R.valueType else {
+            throw MetricError.typeMismatch
+        }
+        guard let value = try await self.lastValue() else {
+            return nil
+        }
+        guard let converted = value as? Timestamped<R>? else {
+            throw MetricError.typeMismatch
+        }
+        return converted
+    }
+
+    public func history<R>(in range: ClosedRange<Date>, as type: R.Type) async throws -> [Timestamped<R>] where R: MetricValue {
+        guard T.valueType == R.valueType else {
+            throw MetricError.typeMismatch
+        }
+        let values = try await self.history(in: range)
+        return try values.map {
+            guard let result = $0 as? Timestamped<R> else {
+                throw MetricError.typeMismatch
+            }
+            return result
+        }
+    }
+
+    public func lastValueData() async throws -> Data? {
+        guard let data = try await consumer.lastValueData(for: id) else {
+            return nil
+        }
+        return data
+    }
+
+    public func lastValueDescription() async throws -> Timestamped<String>? {
+        guard let value = try await lastValue() else {
+            return nil
+        }
+        return value.mapValue { "\($0)" }
+    }
+
+    public func historyDescription(in range: ClosedRange<Date>) async throws -> [Timestamped<String>] {
+        try await history(in: range).map { $0.mapValue(String.init(describing:)) }
+    }
+}
