@@ -7,6 +7,7 @@ public enum ServerRoute {
     case allLastValues
     case extendedInfoList
     case metricHistory(MetricIdHash)
+    case pushValueToMetric(MetricIdHash)
 
     public var rawValue: String {
         switch self {
@@ -15,6 +16,7 @@ public enum ServerRoute {
         case .allLastValues: return "last/all"
         case .extendedInfoList: return "list/extended"
         case .metricHistory(let hash): return "history/\(hash)"
+        case .pushValueToMetric(let hash): return "push/\(hash)"
         }
     }
 
