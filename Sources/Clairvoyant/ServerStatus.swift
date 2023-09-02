@@ -5,7 +5,8 @@ public enum ServerStatus: UInt8, Codable {
     /**
      The server did not respond to a status request
 
-     This case is not set by the server itself, but represents a state of a server status query from outside */
+     This case is not set by the server itself, but represents a state of a server status query from outside
+     */
     case noResponse = 0
 
     /**
@@ -42,6 +43,11 @@ public enum ServerStatus: UInt8, Codable {
      The server never reported any status, e.g. if it doesn't support the functionality.
      */
     case neverReported = 7
+
+    /**
+     The server is not running.
+     */
+    case notRunning = 8
 }
 
 extension ServerStatus: CustomStringConvertible {
@@ -64,6 +70,8 @@ extension ServerStatus: CustomStringConvertible {
             return "Terminated"
         case .neverReported:
             return "Never reported"
+        case .notRunning:
+            return "Not running"
         }
     }
 }
