@@ -85,7 +85,7 @@ public actor MetricConsumer {
      - Throws: `MetricError` errors, as well as errors from the decoder
      */
     public func list() async throws -> [MetricInfo] {
-        let data = try await post(path: "list")
+        let data = try await post(route: .getMetricList)
         return try decode(from: data)
     }
 
@@ -170,7 +170,7 @@ public actor MetricConsumer {
      */
     func lastValueData(for metric: MetricId) async throws -> Data? {
         do {
-            return try await post(path: "last/\(metric.hashed())")
+            return try await post(route: .lastValue(metric.hashed()))
         } catch MetricError.noValueAvailable {
             return nil
         }
@@ -182,12 +182,12 @@ public actor MetricConsumer {
      - Note: If no last value exists for a metric, then the dictionary key will be missing.
      */
     public func lastValueDataForAllMetrics() async throws -> [MetricIdHash : Data] {
-        let data = try await post(path: "last/all")
+        let data = try await post(route: .allLastValues)
         return try decode(from: data)
     }
 
     public func lastValueDescriptionForAllMetrics() async throws -> [MetricIdHash : Timestamped<String>] {
-        let data = try await post(path: "extended/all")
+        let data = try await post(route: .extendedInfoList)
         let values = try decode([ExtendedMetricInfo].self, from: data)
         return values.reduce(into: [:]) {
             guard let data = $1.lastValueData else { return }
@@ -246,7 +246,7 @@ public actor MetricConsumer {
     func historyData(for metric: MetricId, in range: ClosedRange<Date>) async throws -> Data {
         let request = MetricHistoryRequest(range)
         let body = try encode(request)
-        return try await post(path: "history/\(metric.hashed())", body: body)
+        return try await post(route: .metricHistory(metric.hashed()), body: body)
     }
 
     /**
@@ -260,12 +260,12 @@ public actor MetricConsumer {
     /**
      - Throws: `MetricError`
      */
-    private func post(path: String, body: Data? = nil) async throws -> Data {
-        let url = serverUrl.appendingPathComponent(path)
+    private func post(route: ServerRoute, body: Data? = nil) async throws -> Data {
+        let url = serverUrl.appendingPathComponent(route.rawValue)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = body
-        accessProvider.addAccessDataToMetricRequest(&request)
+        accessProvider.addAccessDataToMetricRequest(&request, route: route)
         do {
             let (data, response) = try await urlSessionData(session, for: request)
             guard let response = response as? HTTPURLResponse else {
