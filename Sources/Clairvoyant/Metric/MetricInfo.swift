@@ -1,7 +1,5 @@
 import Foundation
 
-public typealias MetricDescription = MetricInfo
-
 /**
  A description of a metric published by a server.
  */
