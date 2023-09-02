@@ -193,7 +193,7 @@ All requests are `POST` requests, and require authentication.
 Lists the metrics currently published by the observer.
 The request calls the function `metricListAccess(isAllowedForRequest:)` or `metricListAccess(isAllowedForToken:)`, whichever is implemented.
 
-The response is an array of `MetricDescription`, encoded with the binary encoder assigned to the `MetricObserver`.
+The response is an array of `MetricInfo`, encoded with the binary encoder assigned to the `MetricObserver`.
 
 #### `/last/<METRIC_ID_HASH>`
 

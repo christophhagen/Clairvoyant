@@ -8,12 +8,12 @@ public actor ConsumableMetric<T> where T: MetricValue {
     /// The main consumer of the server
     public let consumer: MetricConsumer
 
-    /// The description of the metric
-    public let description: MetricDescription
+    /// The info of the metric
+    public let info: MetricInfo
 
     /// The unique if of the metric
     public nonisolated var id: MetricId {
-        description.id
+        info.id
     }
 
     /**
@@ -25,17 +25,17 @@ public actor ConsumableMetric<T> where T: MetricValue {
      */
     public init(consumer: MetricConsumer, id: MetricId, name: String? = nil, description: String? = nil) {
         self.consumer = consumer
-        self.description = .init(id: id, dataType: T.valueType, name: name, description: description)
+        self.info = .init(id: id, dataType: T.valueType, name: name, description: description)
     }
 
     /**
      Create a handle for a metric.
      - Parameter consumer: The consumer of the server
-     - Parameter description: The info of the metric
+     - Parameter info: The info of the metric
      */
-    public init(consumer: MetricConsumer, description: MetricDescription) {
+    public init(consumer: MetricConsumer, info: MetricInfo) {
         self.consumer = consumer
-        self.description = description
+        self.info = info
     }
 
     /**

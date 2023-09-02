@@ -1,9 +1,11 @@
 import Foundation
 
+public typealias MetricDescription = MetricInfo
+
 /**
  A description of a metric published by a server.
  */
-public struct MetricDescription {
+public struct MetricInfo {
 
     /// The unique if of the metric
     public let id: String
@@ -34,7 +36,7 @@ public struct MetricDescription {
     public let description: String?
 
     /**
-     Create a new metric description.
+     Create a new metric info.
      - Parameter id: The unique if of the metric
      - Parameter dataType: The data type of the values in the metric
      - Parameter name: A descriptive name of the metric
@@ -52,7 +54,7 @@ public struct MetricDescription {
     }
 }
 
-extension MetricDescription: Codable {
+extension MetricInfo: Codable {
 
     enum CodingKeys: Int, CodingKey {
         case id = 1
@@ -65,14 +67,14 @@ extension MetricDescription: Codable {
 
 }
 
-extension MetricDescription: Equatable {
+extension MetricInfo: Equatable {
 
-    public static func == (_ lhs: MetricDescription, _ rhs: MetricDescription) -> Bool {
+    public static func == (_ lhs: MetricInfo, _ rhs: MetricInfo) -> Bool {
         lhs.id == rhs.id
     }
 }
 
-extension MetricDescription: Hashable {
+extension MetricInfo: Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)

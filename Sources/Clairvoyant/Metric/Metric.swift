@@ -16,7 +16,7 @@ public actor Metric<T> where T: MetricValue {
     /**
      The main info about the metric.
      */
-    public nonisolated let description: MetricDescription
+    public nonisolated let info: MetricInfo
 
     /**
      The name of the file where the metric is logged.
@@ -42,7 +42,7 @@ public actor Metric<T> where T: MetricValue {
 
     /// Indicate if the metric can be updated by a remote user
     public nonisolated var canBeUpdatedByRemote: Bool {
-        description.canBeUpdatedByRemote
+        info.canBeUpdatedByRemote
     }
 
     /**
@@ -54,17 +54,17 @@ public actor Metric<T> where T: MetricValue {
      This property is useful to create metrics that should only push values to remote observers, where the values are persisted.
      */
     public nonisolated var keepsLocalHistoryData: Bool {
-        description.keepsLocalHistoryData
+        info.keepsLocalHistoryData
     }
 
     /// The unique if of the metric
     public nonisolated var id: MetricId {
-        description.id
+        info.id
     }
 
     /// A human-readable name of the metric
     public nonisolated var name: String? {
-        description.name
+        info.name
     }
 
     /**
@@ -101,26 +101,26 @@ public actor Metric<T> where T: MetricValue {
      - Parameter fileSize: The maximum size of files in bytes
      */
     init(id: String, observer: MetricObserver, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
-        let description = MetricDescription(
+        let info = MetricInfo(
             id: id,
             dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
-        self.init(description: description,
+        self.init(info: info,
                   observer: observer,
                   fileSize: fileSize)
     }
 
-    private init(description: MetricDescription, observer: MetricObserver, fileSize: Int) {
-        self.description = description
-        let idHash = description.id.hashed()
+    private init(info: MetricInfo, observer: MetricObserver, fileSize: Int) {
+        self.info = info
+        let idHash = info.id.hashed()
         self.idHash = idHash
         self.uniqueId = .random()
         self.observer = observer
         self.fileWriter = .init(
-            id: description.id,
+            id: info.id,
             hash: idHash,
             folder: observer.logFolder,
             encoder: observer.encoder,
@@ -130,7 +130,7 @@ public actor Metric<T> where T: MetricValue {
     }
 
     init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
-        self.description = .init(
+        self.info = .init(
             id: id,
             dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
@@ -178,14 +178,14 @@ public actor Metric<T> where T: MetricValue {
 
     /**
      Create a new metric.
-     - Parameter description: A metric description
+     - Parameter info: A metric info
      - Parameter fileSize: The maximum size of files in bytes
      */
-    public init(_ description: MetricDescription, fileSize: Int = 10_000_000) async throws {
+    public init(_ info: MetricInfo, fileSize: Int = 10_000_000) async throws {
         guard let observer = MetricObserver.standard else {
             throw MetricError.noObserver
         }
-        self.init(description: description, observer: observer, fileSize: fileSize)
+        self.init(info: info, observer: observer, fileSize: fileSize)
         observer.observe(self)
     }
 

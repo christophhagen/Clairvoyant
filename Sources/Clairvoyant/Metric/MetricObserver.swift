@@ -191,14 +191,14 @@ public final class MetricObserver {
 
     // MARK: Routes
 
-    public func getListOfRecordedMetrics() -> [MetricDescription] {
-        observedMetrics.values.map { $0.description }
+    public func getListOfRecordedMetrics() -> [MetricInfo] {
+        observedMetrics.values.map { $0.info }
     }
 
     public func getExtendedDataOfAllRecordedMetrics() async -> [ExtendedMetricInfo] {
         await observedMetrics.values.asyncMap { metric in
             let lastValue = await metric.lastValueData()
-            return ExtendedMetricInfo(info: metric.description, lastValueData: lastValue)
+            return ExtendedMetricInfo(info: metric.info, lastValueData: lastValue)
         }
     }
 

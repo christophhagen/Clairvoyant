@@ -6,7 +6,7 @@ public protocol GenericConsumableMetric {
     var consumer: MetricConsumer { get }
 
     /// The info of the metric
-    var description: MetricDescription { get }
+    var info: MetricInfo { get }
 
     /**
      Get the encoded data of the last value.
@@ -36,17 +36,17 @@ extension GenericConsumableMetric {
 
     /// The unique if of the metric
     public var id: MetricId {
-        description.id
+        info.id
     }
 
     /// The data type of the values in the metric
     public var dataType: MetricType {
-        description.dataType
+        info.dataType
     }
 
     /// A name to display for the metric
     public var name: String? {
-        description.name
+        info.name
     }
 
     /**

@@ -24,7 +24,7 @@ public actor MetricConsumer {
     public let encoder: BinaryEncoder
 
     /// Custom mappings to create consumable metrics for types
-    private var customTypeConstructors: [String : (MetricDescription) -> GenericConsumableMetric]
+    private var customTypeConstructors: [String : (MetricInfo) -> GenericConsumableMetric]
 
     /// Custom mappings to create consumable metrics for types
     private var customTypeDescriptors: [String : (Data) -> Timestamped<String>]
@@ -84,7 +84,7 @@ public actor MetricConsumer {
      - Returns: A list of available metrics
      - Throws: `MetricError` errors, as well as errors from the decoder
      */
-    public func list() async throws -> [MetricDescription] {
+    public func list() async throws -> [MetricInfo] {
         let data = try await post(path: "list")
         return try decode(from: data)
     }
@@ -102,11 +102,11 @@ public actor MetricConsumer {
 
     /**
      Get a typed handle to process a specific metric.
-     - Parameter description: The info about the metric to create.
+     - Parameter info: The info about the metric to create.
      - Returns: A consumable metric with the specified info
      */
-    public func metric<T>(from description: MetricDescription, as type: T.Type = T.self) -> ConsumableMetric<T> where T: MetricValue {
-        .init(consumer: self, description: description)
+    public func metric<T>(from info: MetricInfo, as type: T.Type = T.self) -> ConsumableMetric<T> where T: MetricValue {
+        .init(consumer: self, info: info)
     }
 
     /**
@@ -117,7 +117,7 @@ public actor MetricConsumer {
      - Returns: A consumable metric with the specified info
      - Throws: `MetricError.typeMismatch` if the custom type is not registered.
      */
-    public func genericMetric(from info: MetricDescription) throws -> GenericConsumableMetric {
+    public func genericMetric(from info: MetricInfo) throws -> GenericConsumableMetric {
         switch info.dataType {
         case .integer:
             return metric(from: info, as: Int.self)
@@ -155,7 +155,7 @@ public actor MetricConsumer {
      */
     public func register<T>(customType: T.Type, named typeName: String) where T: MetricValue {
         customTypeConstructors[typeName] = { info in
-            return ConsumableMetric<T>(consumer: self, description: info)
+            return ConsumableMetric<T>(consumer: self, info: info)
         }
         customTypeDescriptors[typeName] = { [weak self] data in
             guard let self else {

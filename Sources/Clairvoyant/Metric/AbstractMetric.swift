@@ -3,9 +3,9 @@ import Foundation
 protocol AbstractMetric: AnyObject, GenericMetric {
 
     /**
-     The description of the metric.
+     The info of the metric.
      */
-    var description: MetricDescription { get }
+    var info: MetricInfo { get }
 
     /**
      The name of the file where the metric is logged.

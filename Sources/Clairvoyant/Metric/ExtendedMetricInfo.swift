@@ -6,12 +6,12 @@ import Foundation
 public struct ExtendedMetricInfo {
 
     /// The unique if of the metric
-    public let info: MetricDescription
+    public let info: MetricInfo
 
     /// The data of the last value
     public let lastValueData: Data?
 
-    public init(info: MetricDescription, lastValueData: Data? = nil) {
+    public init(info: MetricInfo, lastValueData: Data? = nil) {
         self.info = info
         self.lastValueData = lastValueData
     }
