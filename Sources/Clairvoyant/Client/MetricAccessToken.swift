@@ -1,26 +1,20 @@
 import Foundation
 
 public struct MetricAccessToken: MetricAccessTokenProvider {
-
-    public let accessToken: Data
-
+    
+    public let base64: String
+    
+    public init(base64: String) {
+        self.base64 = base64
+    }
+    
     public init(accessToken: Data) {
-        self.accessToken = accessToken
+        self.base64 = accessToken.base64EncodedString()
     }
-
-    public init?(base64String: String) {
-        guard let accessToken = Data(base64Encoded: base64String) else {
-            return nil
-        }
-        self.accessToken = accessToken
-    }
-
+    
+    
     public init(string: String) {
-        self.accessToken = string.data(using: .utf8)!
-    }
-
-    public var base64: String {
-        accessToken.base64EncodedString()
+        self.init(accessToken: string.data(using: .utf8)!)
     }
 }
 
