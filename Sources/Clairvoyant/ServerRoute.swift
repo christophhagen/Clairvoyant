@@ -22,3 +22,24 @@ public enum ServerRoute {
 
     public static var headerAccessToken = "token"
 }
+
+extension ServerRoute: Equatable {
+
+    public static func == (lhs: ServerRoute, rhs: ServerRoute) -> Bool {
+        lhs.rawValue == rhs.rawValue
+    }
+}
+
+extension ServerRoute: Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rawValue)
+    }
+}
+
+extension ServerRoute: CustomStringConvertible {
+
+    public var description: String {
+        rawValue
+    }
+}

@@ -76,6 +76,8 @@ extension ServerStatus: CustomStringConvertible {
     }
 }
 
+extension ServerStatus: Equatable { }
+
 extension ServerStatus: Timestampable { }
 
 extension ServerStatus: MetricValue {
