@@ -191,6 +191,13 @@ public final class MetricObserver {
 
     // MARK: Routes
 
+    /**
+     Access a list of all metric id hashes currently observed by this instance.
+     */
+    public func getAllMetricHashes() -> [MetricIdHash] {
+        return Array(observedMetrics.keys)
+    }
+
     public func getListOfRecordedMetrics() -> [MetricInfo] {
         observedMetrics.values.map { $0.info }
     }
