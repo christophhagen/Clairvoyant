@@ -198,8 +198,11 @@ public final class MetricObserver {
         return Array(observedMetrics.keys)
     }
 
-    public func getListOfRecordedMetrics() -> [MetricInfo] {
-        observedMetrics.values.map { $0.info }
+    /**
+     Get a mapping of all metric hashes to the associated metric info.
+     */
+    public func getListOfRecordedMetrics() -> [MetricIdHash : MetricInfo] {
+        observedMetrics.mapValues { $0.info }
     }
 
     public func getExtendedDataOfAllRecordedMetrics() async -> [ExtendedMetricInfo] {
