@@ -209,8 +209,8 @@ public final class MetricObserver {
         }
     }
 
-    public func getLastValuesOfAllMetrics() async -> [String : Data] {
-        var result = [String : Data]()
+    public func getLastValuesOfAllMetrics() async -> [MetricIdHash : Data] {
+        var result = [MetricIdHash : Data]()
         for (id, metric) in observedMetrics {
             result[id] = await metric.lastValueData()
         }
