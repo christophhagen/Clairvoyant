@@ -205,13 +205,20 @@ public final class MetricObserver {
         observedMetrics.mapValues { $0.info }
     }
 
-    public func getExtendedDataOfAllRecordedMetrics() async -> [ExtendedMetricInfo] {
-        await observedMetrics.values.asyncMap { metric in
-            let lastValue = await metric.lastValueData()
-            return ExtendedMetricInfo(info: metric.info, lastValueData: lastValue)
-        }
+    /**
+     Get a mapping of all metric hashes to the associated extended metric info (inkluding last value).
+     */
+    public func getExtendedDataOfAllRecordedMetrics() async -> [MetricIdHash : ExtendedMetricInfo] {
+        await observedMetrics.asyncMap { metric in
+            let lastValue = await metric.value.lastValueData()
+            let info = ExtendedMetricInfo(info: metric.value.info, lastValueData: lastValue)
+            return (hash: metric.key, info: info)
+        }.reduce(into: [:]) { $0[$1.hash] = $1.info }
     }
 
+    /**
+     Get a mapping of all metric hashes to the associated last value data.
+     */
     public func getLastValuesOfAllMetrics() async -> [MetricIdHash : Data] {
         var result = [MetricIdHash : Data]()
         for (id, metric) in observedMetrics {
