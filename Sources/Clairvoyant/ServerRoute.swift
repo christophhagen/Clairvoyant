@@ -47,7 +47,7 @@ public enum ServerRoute {
         case metricHistory = "history"
         case pushValueToMetric = "push"
 
-        func with(hash: MetricIdHash) -> ServerRoute {
+        public func with(hash: MetricIdHash) -> ServerRoute {
             switch self {
             case .getMetricList: return .getMetricList
             case .lastValue: return .lastValue(hash)
@@ -58,7 +58,7 @@ public enum ServerRoute {
             }
         }
 
-        func appending(hash: MetricIdHash) -> String {
+        public func appending(hash: MetricIdHash) -> String {
             return rawValue + "/" + hash
         }
     }
