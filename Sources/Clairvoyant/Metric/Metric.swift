@@ -337,6 +337,8 @@ public actor Metric<T> where T: MetricValue {
         remoteObservers[remoteObserver] = []
     }
 
+    // MARK: Remote push
+
     /**
      Try to send all pending values to remote observers.
      If there are no pending values, then no request is made.
@@ -409,6 +411,21 @@ public actor Metric<T> where T: MetricValue {
         } catch {
             log("Failed to push value to \(remoteUrl.path): \(error)")
             return false
+        }
+    }
+
+    // MARK: Deleting history
+
+    /**
+     Delete all historic values before a specific date.
+     - Parameter date: The date before which all values should be deleted.
+     - Throws: `MetricError`
+     */
+    public func deleteHistory(before date: Date) throws {
+        try fileWriter.deleteHistory(before: date)
+        if let last = lastValue()?.timestamp, last < date {
+            try fileWriter.deleteLastValueFile()
+            _lastValue = nil
         }
     }
 }

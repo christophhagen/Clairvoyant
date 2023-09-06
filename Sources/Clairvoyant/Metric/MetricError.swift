@@ -55,6 +55,8 @@ public enum MetricError: UInt8, Error {
 
     case noObserver = 13
 
+    case failedToDeleteLogFile = 14
+
 }
 
 extension MetricError {

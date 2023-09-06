@@ -216,6 +216,31 @@ final class ClairvoyantTests: XCTestCase {
         XCTAssertEqual(last?.value, 2)
     }
 
+    func testDeleteHistory() async throws {
+        let observer = createObserver()
+        let metric: Metric<Int> = observer.addMetric(id: "myInt")
+
+        let startDate = Date()
+        let deleteDate = startDate.addingTimeInterval(1)
+        let endDate = startDate.addingTimeInterval(2)
+
+        let result1 = try await metric.update(1, timestamp: startDate)
+        XCTAssertTrue(result1)
+        let result2 = try await metric.update(2, timestamp: endDate)
+        XCTAssertTrue(result2)
+
+        let history1 = await metric.fullHistory()
+        XCTAssertEqual(history1.count, 2)
+
+        try await metric.deleteHistory(before: deleteDate)
+        let history2 = await metric.fullHistory()
+        XCTAssertEqual(history2.count, 1)
+        XCTAssertEqual(history2.first?.value, 2)
+
+        let last = await metric.lastValue()
+        XCTAssertEqual(last?.value, 2)
+    }
+
 }
 
 private extension Date {
