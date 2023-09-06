@@ -113,106 +113,66 @@ MetricObserver.standard = observer
 let metric = Metric("metric", containing: Int.self) // Automatically added to `observer`
 ```
 
-## Exposing metrics with Vapor
+### Complex types
+
+It's possible to use metrics with custom types, so that arbitrary data can be logged.
+Any complex type that conforms to the `MetricValue` protocol works.
+The protocol requirements are a static property of `MetricType`, an `Enum` to signal the type of data being encoded.
+Custom types should use the `.customType(named:)` case.
+
+Additionally, custom types must conform to `Codable` (for encoding/decoding) and `Equatable`, to allow comparisons with the last value.
+
+```swift
+struct Player: MetricValue, CustomStringConvertible {
+
+    static let valueType: MetricType = .custom(named: "Player")
+    
+    let name: String
+    
+    let score: Int
+    
+    var description: String { "\(name) (\(score))"}
+}
+```
+
+This is already sufficient to use metrics with the type, like so:
+
+```swift
+let metric = Metric("player.current", containing: Player.self)
+let newPlayer = Player(name: "Alice", score: 42)
+try await metric.update(newPlayer)
+```
+
+On the client side, this process works in much the same way, by creating a `ConsumableMetric` of the custom type.
+
+```swift
+let myMetric: ConsumableMetric<Player> = metricConsumer.metric(id: "player.current")
+```
+
+One special addition should be made when using `GenericConsumableMetric`s to use metrics in type-erased ways, e.g. in SwiftUI views.
+It's not possible for a `MetricConsumer` to decode custom types without knowing about the type, so each custom type used in generic metrics should be registered with the consumer:
+
+```swift
+metricConsumer.register(customType: Player.self, named: "Player")
+```
+
+Now, textual descriptions of the generic metric gives useful output:
+
+```swift
+let genericMetric = myMetric as GenericConsumableMetric
+let description = try await genericMetric.lastValueDescription()!.value
+print(description) // Prints "Alice (42)"
+```
+
+### Exposing metrics with Vapor
 
 Logging values to disk is great, but the data should also be available for inspection and monitoring.
 Clairvoyant provides a separate package [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) to integrate metric access into Vapor servers.
-Each `MetricObserver` can be exposed separately on a subpath of the server.
 
-```swift
-import Clairvoyant
-import ClairvoyantVapor
+### Receiving from other servers
 
-func configure(app: Application) {
-    let observer = MetricObserver(...)
-    let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
-    observer.registerRoutes(app)
-}
-```
-
-This will add a number of routes to the default path, which is `/metrics`.
-The path can also be passed as a parameter to `registerRoutes()`.
-
-### Access control
-
-A `VaporMetricProvider` requires an access manager, as seen in the example above.
-Since the metrics may contain sensitive data, they should only be accessible by authorized entities.
-Access control is left to the application, since there may be many ways to handle authentication and access control.
-To manage access control, a `MetricRequestAccessManager` must be provided for each metric provider.
-
-```swift
-final class MyAuthenticator: MetricRequestAccessManager {
-
-    func metricListAccess(isAllowedForRequest request: Request) throws {
-        throw MetricError.accessDenied
-    }
-
-    func metricAccess(to metric: MetricId, isAllowedForRequest request: Request) throws {
-        throw MetricError.accessDenied
-    }
-}
-```
-
-The authenticator must be provided to the initializer of a `VaporMetricProvider`.
-
-```swift
-let provider = VaporMetricProvider(observer: observer, accessManager: MyAuthenticator())
-```
-
-If the authentication should be based on access tokens, it's also possible to implement `MetricAccessManager`.
-
-```swift
-final class MyAuthenticator: MetricAccessManager {
-    
-    func metricListAccess(isAllowedForToken accessToken: Data) throws {
-        throw MetricError.accessDenied
-    }
-
-    func metricAccess(to metric: MetricId, isAllowedForToken accessToken: Data) throws {
-        throw MetricError.accessDenied
-    }
-}
-```
-
-Or, if very basic authentication should be used, by using the provided in-memory stub:
-```swift
-let accessToken: Set<AccessToken> = ...
-let authenticator = AccessTokenManager(accessToken)
-let provider = VaporMetricProvider(observer: observer, accessManager: authenticator)
-```
-
-### API
-
-Now that the metrics are protected, they can be accessed by authorized entities. 
-There are currently four main entry points. 
-All requests are `POST` requests, and require authentication. 
-**Note**: If the included clients are used, then the API is already correctly implemented and not important. 
-
-#### `/list`
-
-Lists the metrics currently published by the observer.
-The request calls the function `metricListAccess(isAllowedForRequest:)` or `metricListAccess(isAllowedForToken:)`, whichever is implemented.
-
-The response is an array of `MetricInfo`, encoded with the binary encoder assigned to the `MetricObserver`.
-
-#### `/last/<METRIC_ID_HASH>`
-
-Get the last value of the metric. The `<METRIC_ID_HASH>` are the first 16 bytes of the SHA256 hash of the metric `ID` as a hex string (32 characters). Authentication of the `POST` request depends on the chosen implementation.
-The response is a `Timestamped<T>` with the last value of the metric, encoded with the supplied binary encoder. If no value exists yet, then status `410` is returned.
-
-#### `/history/<METRIC_ID_HASH>`
-
-Get the logged values of a metric in a specified time interval. 
-The time interval is provided in the `POST` request body as a binary encoding of a `MetricHistoryRequest` containing the start and end dates of the interval, and a maximum count of elements to return.
-The request can be performed chronologically (start < end) or reversed (end > start).
-Authentication of the request depends on the chosen implementation.
-The response is a `[Timestamped<T>]` with the values in the provided range (up to the given limit).
-
-#### `/push/<METRIC_ID_HASH>`
-
-Add values to a metric through the web interface. This function is mostly needed to push metrics to other vapor servers.
-Updating a metric is only allowed if `canBeUpdatedByRemote` is set to `true` when the metric is created.
-The request body of the `POST` request contains a `[Timestamped<T>]` encoded as binary data.
+To receive a metric pushed from a remote server, configure a metric with `canBeUpdatedByRemote = true`. Any time a new value is received the metric will be updated with this value.
+The last value as well as history data can be accessed as with any other metric.
 
 ### Pushing to other servers
 
@@ -221,15 +181,6 @@ To configure this feature, one or more `RemoteMetricObserver`s can be added to e
 Whenever a new value is set, then the metric attempts to send all pending updates (including any previously failed values) to the remote observer using the `push` route specified above.
 
 The remote server must have a metric with the same `id` registered with the observer, and the metric must be configured with `canBeUpdatedByRemote = true`.
-
-### Receiving from other servers
-
-To receive a metric pushed from a remote server, configure a metric with `canBeUpdatedByRemote = true`. Any time a new value is received the metric will be updated with this value.
-The last value as well as history data can be accessed as with any other metric.
-
-### Complex types
-
-**To Be Documented**
 
 ## Usage with `swift-log`
 
@@ -362,7 +313,6 @@ Metrics can be configured with remote observers, were new values are automatical
 ## Open tasks
 
 - Persist pending values to remote observers between launches
-- Add function to delete old values from logs
 - Add total file size limit to metric (automatically delete oldest files)
 - Provide values as strings/JSON for web view
 - Add convenience features to observe log files or perform periodic network requests.
