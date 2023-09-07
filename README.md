@@ -144,27 +144,6 @@ let newPlayer = Player(name: "Alice", score: 42)
 try await metric.update(newPlayer)
 ```
 
-On the client side, this process works in much the same way, by creating a `ConsumableMetric` of the custom type.
-
-```swift
-let myMetric: ConsumableMetric<Player> = metricConsumer.metric(id: "player.current")
-```
-
-One special addition should be made when using `GenericConsumableMetric`s to use metrics in type-erased ways, e.g. in SwiftUI views.
-It's not possible for a `MetricConsumer` to decode custom types without knowing about the type, so each custom type used in generic metrics should be registered with the consumer:
-
-```swift
-metricConsumer.register(customType: Player.self, named: "Player")
-```
-
-Now, textual descriptions of the generic metric gives useful output:
-
-```swift
-let genericMetric = myMetric as GenericConsumableMetric
-let description = try await genericMetric.lastValueDescription()!.value
-print(description) // Prints "Alice (42)"
-```
-
 ### Exposing metrics with Vapor
 
 Logging values to disk is great, but the data should also be available for inspection and monitoring.
