@@ -1,6 +1,6 @@
 import Foundation
 
-enum HTTPStatusCode {
+public enum HTTPStatusCode {
 
     case custom(code: UInt16)
 
@@ -149,7 +149,7 @@ enum HTTPStatusCode {
         }
     }
 
-    init(rawValue: UInt16) {
+    public init(rawValue: UInt16) {
         switch rawValue {
         case 100:
             self = .`continue`
@@ -281,12 +281,12 @@ enum HTTPStatusCode {
 
 extension HTTPStatusCode: MetricValue {
 
-    static let valueType: MetricType  = .httpStatus
+    public static let valueType: MetricType  = .httpStatus
 }
 
 extension HTTPStatusCode: Encodable {
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
@@ -294,7 +294,7 @@ extension HTTPStatusCode: Encodable {
 
 extension HTTPStatusCode: Decodable {
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(UInt16.self)
         self.init(rawValue: rawValue)
@@ -303,21 +303,21 @@ extension HTTPStatusCode: Decodable {
 
 extension HTTPStatusCode: Equatable {
 
-    static func == (lhs: HTTPStatusCode, rhs: HTTPStatusCode) -> Bool {
+    public static func == (lhs: HTTPStatusCode, rhs: HTTPStatusCode) -> Bool {
         lhs.rawValue == rhs.rawValue
     }
 }
 
 extension HTTPStatusCode: Comparable {
 
-    static func < (lhs: HTTPStatusCode, rhs: HTTPStatusCode) -> Bool {
+    public static func < (lhs: HTTPStatusCode, rhs: HTTPStatusCode) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
 }
 
 extension HTTPStatusCode: Hashable {
 
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(rawValue)
     }
 }

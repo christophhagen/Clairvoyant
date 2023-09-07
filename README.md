@@ -23,6 +23,7 @@ This package is part of a larger collection of Swift packages, which separate th
 | --- | --- |
 | Clairvoyant | The main module with metrics and consumers |
 | [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) | Extensions to expose metrics through a [Vapor](https://vapor.codes) server |
+| [ClairvoyantClient](https://github.com/christophhagen/ClairvoyantClient) | A client to communicate with a [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) server |
 | [ClairvoyantLogging](https://github.com/christophhagen/ClairvoyantLogging) | Use a metrics observer as a backend for [swift-log](https://github.com/apple/swift-log) |
 | [ClairvoyantMetrics](https://github.com/christophhagen/ClairvoyantMetrics) | Use a metrics observer as a backend for [swift-metrics](https://github.com/apple/swift-metrics) |
 | [ClairvoyantCBOR](https://github.com/christophhagen/ClairvoyantCBOR) | Extensions to use [CBOR](https://cbor.io) encoding for metrics |
@@ -244,3 +245,4 @@ Metrics can be configured with remote observers, were new values are automatical
 - Add total file size limit to metric (automatically delete oldest files)
 - Provide values as strings/JSON for web view
 - Add convenience features to observe log files or perform periodic network requests.
+- Provide functionality to fully synchronize metrics across systems

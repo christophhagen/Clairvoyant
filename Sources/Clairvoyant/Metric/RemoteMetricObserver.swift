@@ -12,9 +12,9 @@ public struct RemoteMetricObserver {
     public let remoteUrl: URL
 
     /// The provider of the authentication required to access the remote server
-    let authenticationToken: MetricAccessToken
+    let authenticationToken: String
 
-    public init(remoteUrl: URL, authenticationToken: MetricAccessToken) {
+    public init(remoteUrl: URL, authenticationToken: String) {
         self.remoteUrl = remoteUrl
         self.authenticationToken = authenticationToken
     }
