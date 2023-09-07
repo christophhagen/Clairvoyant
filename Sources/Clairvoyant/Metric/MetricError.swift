@@ -47,35 +47,51 @@ public enum MetricError: UInt8, Error {
      */
     case badGateway = 9
 
+    /**
+     Some internal error occured.
+     */
     case internalError = 10
 
+    /**
+     The metric does not yet provide a value.
+     */
     case noValueAvailable = 11
 
+    /**
+     The metric type does not fit the intended Swift type.
+     */
     case typeMismatch = 12
 
+    /**
+     There is no metric observer available to perform the function.
+     */
     case noObserver = 13
 
+    /**
+     A log file could not be deleted while deleting metric history.
+     */
     case failedToDeleteLogFile = 14
 
 }
 
 extension MetricError {
 
-    init?(statusCode: Int) {
+    public init?(statusCode: Int) {
         switch statusCode {
-        case 424: self = .failedToEncode
-        case 422: self = .logFileCorrupted
-        case 401: self = .accessDenied
-        case 412: self = .badMetricId
-        case 417: self = .failedToDecode
-        case 423: self = .failedToOpenLogFile
-        case 503: self = .requestFailed
-        case 404: self = .notFound
-        case 502: self = .badGateway
-        case 500: self = .internalError
-        case 410: self = .noValueAvailable
-        case 421: self = .noObserver
-        case 428: self = .typeMismatch
+        case 424: self = .failedToEncode // 1, .failedDependency
+        case 422: self = .logFileCorrupted // 2, .unprocessableEntity
+        case 401: self = .accessDenied // 3, .unauthorized
+        case 417: self = .failedToDecode // 4, .expectationFailed
+        case 412: self = .badMetricId // 5, .preconditionFailed
+        case 423: self = .failedToOpenLogFile // 6, .locked
+        case 503: self = .requestFailed // 7, .serviceUnavailable
+        case 404: self = .notFound // 8, .notFound
+        case 502: self = .badGateway // 9, .badGateway
+        case 500: self = .internalError // 10, .internalServerError
+        case 410: self = .noValueAvailable // 11, .gone
+        case 428: self = .typeMismatch // 12, .preconditionRequired
+        case 421: self = .noObserver // 13, .misdirectedRequest
+        case 304: self = .failedToDeleteLogFile // 14, .notModified
         default:
             return nil
         }
