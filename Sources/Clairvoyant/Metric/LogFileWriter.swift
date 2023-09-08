@@ -222,14 +222,6 @@ final class LogFileWriter<T> where T: MetricValue {
     
     // MARK: Writing
 
-    private func decodeTimestampedValue(from data: Data) throws -> Timestamped<T> {
-        do {
-            return try decoder.decode(from: data)
-        } catch {
-            throw MetricError.failedToDecode
-        }
-    }
-
     func decodeTimestampedValues(from data: Data) throws -> [Timestamped<T>] {
         do {
             return try decoder.decode(from: data)
@@ -349,7 +341,7 @@ final class LogFileWriter<T> where T: MetricValue {
         }
         
         do {
-            return try decodeTimestampedValue(from: data)
+            return try decoder.decode(Timestamped<T>.self, from: data)
         } catch {
             logError("Failed to decode last value: \(error)")
             try? deleteLastValueFile()
