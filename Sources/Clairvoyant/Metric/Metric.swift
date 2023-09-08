@@ -161,7 +161,7 @@ public actor Metric<T> where T: MetricValue {
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter fileSize: The maximum size of files in bytes
      */
-    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) async throws {
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) throws {
         guard let observer = MetricObserver.standard else {
             throw MetricError.noObserver
         }
