@@ -35,9 +35,6 @@ public final class MetricObserver {
     /// The internal metric used for logging
     private let logMetric: Metric<String>
 
-    /// The unique random id assigned to each observer to distinguish them
-    private let uniqueId: Int
-
     /**
      The metrics observed by this instance.
 
@@ -68,7 +65,6 @@ public final class MetricObserver {
         decoder: BinaryDecoder,
         fileSize: Int = 10_000_000) {
 
-            self.uniqueId = .random()
             self.encoder = encoder
             self.decoder = decoder
             self.maximumFileSizeInBytes = fileSize
@@ -120,24 +116,17 @@ public final class MetricObserver {
      - Note: Once a metric is removed, it can't be added again.
      - Parameter metric: The metric to remove.
      */
-    public func remove<T>(_ metric: Metric<T>) where T: MetricValue {
-        guard let old = observedMetrics[metric.idHash], old.uniqueId == metric.uniqueId else {
+    public func remove<T>(_ metric: Metric<T>) async where T: MetricValue {
+        guard let old = observedMetrics[metric.idHash] else {
             return
         }
-        Task {
-            await old.set(observer: nil)
-        }
+        await old.set(observer: nil)
         observedMetrics[metric.idHash] = nil
     }
 
     func observe(_ metric: AbstractMetric) {
-        if let old = observedMetrics[metric.idHash], old.uniqueId != metric.uniqueId {
-            // Comparing unique ids prevents potential problem:
-            // When the same metric is registered twice in succession,
-            // then the observer would be removed after the metric is created
-            Task {
-                await old.set(observer: nil)
-            }
+        guard observedMetrics[metric.idHash] == nil else {
+            fatalError("A metric with id '\(metric.id)' was added twice to the same observer")
         }
         observedMetrics[metric.idHash] = metric
     }
@@ -160,14 +149,16 @@ public final class MetricObserver {
      - Parameter message: The log entry to add.
      - Returns: `true` if the message was added to the log, `false` if the message could not be saved.
      */
-    public func log(_ message: String) {
+    public func log(_ message: String) async {
         print(message)
-        Task {
+        do {
             try await logMetric.update(message)
+        } catch {
+            print("[ERROR] Failed to update log metric: \(error)")
         }
     }
 
-    func log(_ message: String, for metric: MetricId) {
+    func log(_ message: String, for metric: MetricId) async {
         let entry = "[\(metric)] " + message
         print(entry)
 
@@ -175,8 +166,10 @@ public final class MetricObserver {
         guard metric == logMetric.id else {
             return
         }
-        Task {
+        do {
             try await logMetric.update(entry)
+        } catch {
+            print("[ERROR] Failed to update log metric: \(error)")
         }
     }
 
@@ -225,12 +218,5 @@ public final class MetricObserver {
             result[id] = await metric.lastValueData()
         }
         return result
-    }
-}
-
-extension MetricObserver: Equatable {
-
-    public static func == (lhs: MetricObserver, rhs: MetricObserver) -> Bool {
-        lhs.uniqueId == rhs.uniqueId
     }
 }

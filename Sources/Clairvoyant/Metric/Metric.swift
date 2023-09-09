@@ -37,9 +37,6 @@ public actor Metric<T> where T: MetricValue {
 
     private let fileWriter: LogFileWriter<T>
 
-    /// The unique random id assigned to each metric to distinguish them
-    let uniqueId: Int
-
     /// Indicate if the metric can be updated by a remote user
     public nonisolated var canBeUpdatedByRemote: Bool {
         info.canBeUpdatedByRemote
@@ -117,7 +114,6 @@ public actor Metric<T> where T: MetricValue {
         self.info = info
         let idHash = info.id.hashed()
         self.idHash = idHash
-        self.uniqueId = .random()
         self.observer = observer
         self.fileWriter = .init(
             id: info.id,
@@ -139,7 +135,6 @@ public actor Metric<T> where T: MetricValue {
             description: description)
         let idHash = id.hashed()
         self.idHash = idHash
-        self.uniqueId = .random()
         self.observer = nil
         self.fileWriter = .init(
             id: id,
@@ -189,12 +184,12 @@ public actor Metric<T> where T: MetricValue {
         observer.observe(self)
     }
 
-    func log(_ message: String) {
+    func log(_ message: String) async {
         guard let observer else {
             print("[\(id)] \(message)")
             return
         }
-        observer.log(message, for: id)
+        await observer.log(message, for: id)
     }
 
     /**
@@ -242,8 +237,8 @@ public actor Metric<T> where T: MetricValue {
      - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
     @discardableResult
-    public func update(_ value: T, timestamp: Date = Date()) throws -> Bool {
-        try update(.init(value: value, timestamp: timestamp))
+    public func update(_ value: T, timestamp: Date = Date()) async throws -> Bool {
+        try await update(.init(value: value, timestamp: timestamp))
     }
 
     /**
@@ -256,7 +251,7 @@ public actor Metric<T> where T: MetricValue {
      - Throws: MetricErrors of type `failedToOpenLogFile` or `failedToEncode`
      */
     @discardableResult
-    public func update(_ value: Timestamped<T>) throws -> Bool {
+    public func update(_ value: Timestamped<T>) async throws -> Bool {
         if let lastValue = lastValue() {
             guard value.value != lastValue.value else {
                 // Skip duplicate elements to save space
@@ -271,12 +266,12 @@ public actor Metric<T> where T: MetricValue {
             try fileWriter.write(value)
         }
         _lastValue = value
-        push(value)
+        await push(value)
         return true
     }
 
-    public func removeFromObserver() {
-        observer?.remove(self)
+    public func removeFromObserver() async {
+        await observer?.remove(self)
     }
 
     /**
@@ -284,7 +279,7 @@ public actor Metric<T> where T: MetricValue {
 
      The given sequence is sorted and added to the log. Elements older than the last value are skipped.
      */
-    public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<T> {
+    public func update<S>(_ values: S) async throws where S: Sequence, S.Element == Timestamped<T> {
         let sorted = values.sorted { $0.timestamp }
         var lastValue = lastValue()
         var valuesToPush: [Timestamped<T>] = []
@@ -309,7 +304,7 @@ public actor Metric<T> where T: MetricValue {
         if let lastValue {
             _ = try? fileWriter.write(lastValue: lastValue)
         }
-        push(valuesToPush)
+        await push(valuesToPush)
     }
 
     // MARK: Pushing to remotes
@@ -350,20 +345,14 @@ public actor Metric<T> where T: MetricValue {
         await push([])
     }
 
-    private func push(_ value: Timestamped<T>) {
-        push([value])
-    }
-
-    private func push(_ values: [Timestamped<T>]) {
-        guard !remoteObservers.isEmpty else {
-            return
-        }
-        Task {
-            await push(values)
-        }
+    private func push(_ value: Timestamped<T>) async {
+        await push([value])
     }
 
     private func push(_ values: [Timestamped<T>]) async {
+        guard !remoteObservers.isEmpty else {
+            return
+        }
         await withTaskGroup(of: Void.self) { group in
             for (observer, pending) in remoteObservers {
                 guard !values.isEmpty || !pending.isEmpty else {
@@ -400,16 +389,16 @@ public actor Metric<T> where T: MetricValue {
             request.setValue(remoteObserver.authenticationToken, forHTTPHeaderField: "token")
             let (_, response) = try await urlSessionData(.shared, for: request)
             guard let response = response as? HTTPURLResponse else {
-                log("Invalid response pushing value to \(remoteUrl.path): \(response)")
+                await log("Invalid response pushing value to \(remoteUrl.path): \(response)")
                 return false
             }
             guard response.statusCode == 200 else {
-                log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)")
+                await log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)")
                 return false
             }
             return true
         } catch {
-            log("Failed to push value to \(remoteUrl.path): \(error)")
+            await log("Failed to push value to \(remoteUrl.path): \(error)")
             return false
         }
     }
@@ -455,9 +444,9 @@ extension Metric: GenericMetric {
         return fileWriter.lastValueData()
     }
 
-    public func addDataFromRemote(_ dataPoint: Data) throws {
+    public func addDataFromRemote(_ dataPoint: Data) async throws {
         let values = try fileWriter.decodeTimestampedValues(from: dataPoint)
-        try update(values)
+        try await update(values)
     }
 
     /**

@@ -16,8 +16,6 @@ protocol AbstractMetric: AnyObject, GenericMetric {
      */
     var idHash: MetricIdHash { get }
 
-    var uniqueId: Int { get }
-
     var dataType: MetricType { get }
 
     func getObserver() async -> MetricObserver?
