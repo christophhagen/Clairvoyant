@@ -59,14 +59,12 @@ final class LogFileWriter<T> where T: MetricValue {
         self.metric = metric
     }
     
-    private func logError(_ message: String) {
+    private func logError(_ message: String) async {
         guard let metric else {
             print("[\(metricId)] \(message)")
             return
         }
-        Task {
-            await metric.log(message)
-        }
+        await metric.log(message)
     }
     
     // MARK: URLs
@@ -75,24 +73,24 @@ final class LogFileWriter<T> where T: MetricValue {
         fileManager.fileExists(atPath: url.path)
     }
     
-    private func ensureExistenceOfLogFolder() -> Bool {
+    private func ensureExistenceOfLogFolder() async -> Bool {
         guard !exists(folder) else {
             return true
         }
         do {
             try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
         } catch {
-            logError("Failed to create log folder: \(error)")
+            await logError("Failed to create log folder: \(error)")
             return false
         }
         return true
     }
     
-    func deleteLastValueFile() throws {
+    func deleteLastValueFile() async throws {
         do {
             try fileManager.removeItem(at: lastValueUrl)
         } catch {
-            logError("Failed to delete last value file: \(error)")
+            await logError("Failed to delete last value file: \(error)")
             throw MetricError.failedToDeleteLogFile
         }
     }
@@ -106,19 +104,19 @@ final class LogFileWriter<T> where T: MetricValue {
      - Parameter date: The date of the value, if a new log file must be created
      - Throws: `failedToOpenLogFile`
      */
-    private func getFileHandle(date: Date) throws -> FileHandle {
+    private func getFileHandle(date: Date) async throws -> FileHandle {
         if let handle {
             return handle
         }
         guard !needsNewLogFile else {
-            return try createAndOpenFile(with: date)
+            return try await createAndOpenFile(with: date)
         }
-        guard let url = findLatestFile() else {
-            return try createAndOpenFile(with: date)
+        guard let url = await findLatestFile() else {
+            return try await createAndOpenFile(with: date)
         }
         // Open new file if old one is too large
-        guard fileSize(at: url) < maximumFileSizeInBytes else {
-            return try createAndOpenFile(with: date)
+        guard await fileSize(at: url) < maximumFileSizeInBytes else {
+            return try await createAndOpenFile(with: date)
         }
         do {
             let handle = try FileHandle(forUpdating: url)
@@ -127,22 +125,22 @@ final class LogFileWriter<T> where T: MetricValue {
             self.numberOfBytesInCurrentFile = Int(offset)
             return handle
         } catch {
-            logError("File \(url.lastPathComponent): Failed to open: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to open: \(error)")
             throw MetricError.failedToOpenLogFile
         }
     }
     
-    private func fileSize(at url: URL) -> Int {
+    private func fileSize(at url: URL) async -> Int {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             return Int(attributes[.size] as? UInt64 ?? 0)
         } catch {
-            logError("File \(url.lastPathComponent): Failed to read size: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to read size: \(error)")
             return 0
         }
     }
     
-    private func getAllLogFilesWithStartDates() -> [(url: URL, date: Date)] {
+    private func getAllLogFilesWithStartDates() async -> [(url: URL, date: Date)] {
         guard exists(folder) else {
             return []
         }
@@ -156,7 +154,7 @@ final class LogFileWriter<T> where T: MetricValue {
                 }
                 .sorted { $0.date < $1.date }
         } catch {
-            logError("Failed to get list of files: \(error)")
+            await logError("Failed to get list of files: \(error)")
             return []
         }
     }
@@ -164,8 +162,8 @@ final class LogFileWriter<T> where T: MetricValue {
     /**
      A sorted list of files with the date intervals of the data contained in them
      */
-    private func getAllLogFilesWithIntervals() -> [(url: URL, range: ClosedRange<Date>)] {
-        let all = getAllLogFilesWithStartDates()
+    private func getAllLogFilesWithIntervals() async -> [(url: URL, range: ClosedRange<Date>)] {
+        let all = await getAllLogFilesWithStartDates()
         return all.indices.map { i in
             let (url, start) = all[i]
             let end = (i + 1 < all.count) ? all[i+1].date : Date()
@@ -173,7 +171,7 @@ final class LogFileWriter<T> where T: MetricValue {
         }
     }
 
-    private func getAllLogFiles() -> [URL] {
+    private func getAllLogFiles() async -> [URL] {
         guard exists(folder) else {
             return []
         }
@@ -182,20 +180,20 @@ final class LogFileWriter<T> where T: MetricValue {
                 .filter { Int($0.lastPathComponent) != nil }
                 .sorted { $0.lastPathComponent < $1.lastPathComponent }
         } catch {
-            logError("Failed to get list of files: \(error)")
+            await logError("Failed to get list of files: \(error)")
             return []
         }
     }
 
     
-    private func findLatestFile() -> URL? {
-        getAllLogFilesWithStartDates().last?.url
+    private func findLatestFile() async -> URL? {
+        await getAllLogFilesWithStartDates().last?.url
     }
 
     /**
      - Throws: `failedToOpenLogFile`
      */
-    private func createAndOpenFile(with date: Date) throws -> FileHandle {
+    private func createAndOpenFile(with date: Date) async throws -> FileHandle {
         let url = url(for: date)
         do {
             try Data().write(to: url)
@@ -205,16 +203,16 @@ final class LogFileWriter<T> where T: MetricValue {
             numberOfBytesInCurrentFile = 0
             return handle
         } catch {
-            logError("Failed to create file \(url.lastPathComponent): \(error)")
+            await logError("Failed to create file \(url.lastPathComponent): \(error)")
             throw MetricError.failedToOpenLogFile
         }
     }
     
-    private func closeFile() {
+    private func closeFile() async {
         do {
             try handle?.close()
         } catch {
-            logError("Failed to close file: \(error)")
+            await logError("Failed to close file: \(error)")
         }
         handle = nil
         numberOfBytesInCurrentFile = 0
@@ -230,20 +228,20 @@ final class LogFileWriter<T> where T: MetricValue {
         }
     }
 
-    func encode(_ value: Timestamped<T>) throws -> Data {
+    func encode(_ value: Timestamped<T>) async throws -> Data {
         do {
             return try encoder.encode(value)
         } catch {
-            logError("Failed to encode value: \(error)")
+            await logError("Failed to encode value: \(error)")
             throw MetricError.failedToEncode
         }
     }
 
-    func encode(_ values: [Timestamped<T>]) throws -> Data {
+    func encode(_ values: [Timestamped<T>]) async throws -> Data {
         do {
             return try encoder.encode(values)
         } catch {
-            logError("Failed to encode values: \(error)")
+            await logError("Failed to encode values: \(error)")
             throw MetricError.failedToEncode
         }
     }
@@ -251,12 +249,12 @@ final class LogFileWriter<T> where T: MetricValue {
     /**
      - Throws:`failedToEncode`
      */
-    private func encodeDataForStream(_ value: Timestamped<T>) throws -> TimestampedValueData {
+    private func encodeDataForStream(_ value: Timestamped<T>) async throws -> TimestampedValueData {
         let valueData: Data
         do {
             valueData = try encoder.encode(value.value)
         } catch {
-            logError("Failed to encode value: \(error)")
+            await logError("Failed to encode value: \(error)")
             throw MetricError.failedToEncode
         }
 
@@ -268,60 +266,60 @@ final class LogFileWriter<T> where T: MetricValue {
     /**
      - Throws: `failedToOpenLogFile`, `failedToEncode`
      */
-    func write(_ value: Timestamped<T>) throws {
-        guard ensureExistenceOfLogFolder() else {
+    func write(_ value: Timestamped<T>) async throws {
+        guard await ensureExistenceOfLogFolder() else {
             throw MetricError.failedToOpenLogFile
         }
 
-        try write(lastValue: value)
-        let streamEncodedData = try encodeDataForStream(value)
-        try writeToLog(data: streamEncodedData, date: value.timestamp)
+        try await write(lastValue: value)
+        let streamEncodedData = try await encodeDataForStream(value)
+        try await writeToLog(data: streamEncodedData, date: value.timestamp)
     }
 
-    func writeOnlyToLog(_ value: Timestamped<T>) throws {
-        guard ensureExistenceOfLogFolder() else {
+    func writeOnlyToLog(_ value: Timestamped<T>) async throws {
+        guard await ensureExistenceOfLogFolder() else {
             throw MetricError.failedToOpenLogFile
         }
 
-        let streamEncodedData = try encodeDataForStream(value)
-        try writeToLog(data: streamEncodedData, date: value.timestamp)
+        let streamEncodedData = try await encodeDataForStream(value)
+        try await writeToLog(data: streamEncodedData, date: value.timestamp)
     }
 
     /**
      - Throws: `failedToOpenLogFile`
      */
-    private func writeToLog(data: Data, date: Date) throws {
-        let handle = try getFileHandle(date: date)
+    private func writeToLog(data: Data, date: Date) async throws {
+        let handle = try await getFileHandle(date: date)
         
         do {
             try handle.write(contentsOf: data)
             numberOfBytesInCurrentFile += data.count
         } catch {
-            logError("Failed to write data: \(error)")
+            await logError("Failed to write data: \(error)")
             throw MetricError.failedToOpenLogFile
         }
         if numberOfBytesInCurrentFile >= maximumFileSizeInBytes {
-            closeFile()
+            await closeFile()
             needsNewLogFile = true
         }
     }
 
-    func write(lastValue: Timestamped<T>) throws {
-        let data = try encode(lastValue)
-        writeLastValue(data)
+    func write(lastValue: Timestamped<T>) async throws {
+        let data = try await encode(lastValue)
+        await writeLastValue(data)
     }
     
-    private func writeLastValue(_ data: Data) {
+    private func writeLastValue(_ data: Data) async {
         do {
             try data.write(to: lastValueUrl)
         } catch {
-            logError("Failed to save last value: \(error)")
+            await logError("Failed to save last value: \(error)")
         }
     }
     
     // MARK: Reading
     
-    func lastValueData() -> TimestampedValueData? {
+    func lastValueData() async -> TimestampedValueData? {
         guard exists(lastValueUrl) else {
             // TODO: Read last value from history file?
             return nil
@@ -330,33 +328,33 @@ final class LogFileWriter<T> where T: MetricValue {
         do {
             return try .init(contentsOf: lastValueUrl)
         } catch {
-            logError("Failed to read last value: \(error)")
+            await logError("Failed to read last value: \(error)")
             return nil
         }
     }
     
-    func lastValue() -> Timestamped<T>? {
-        guard let data = lastValueData() else {
+    func lastValue() async -> Timestamped<T>? {
+        guard let data = await lastValueData() else {
             return nil
         }
         
         do {
             return try decoder.decode(Timestamped<T>.self, from: data)
         } catch {
-            logError("Failed to decode last value: \(error)")
-            try? deleteLastValueFile()
+            await logError("Failed to decode last value: \(error)")
+            try? await deleteLastValueFile()
             return nil
         }
     }
     
     // MARK: History
     
-    func getHistory(in range: ClosedRange<Date>, maximumValueCount: Int? = nil) -> [Timestamped<T>] {
+    func getHistory(in range: ClosedRange<Date>, maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
         var remainingValuesToRead = maximumValueCount ?? .max
         var result: [Timestamped<T>] = []
-        let files = getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
+        let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
         for file in files {
-            let elements = decodeTimestampedStream(from: file.url)
+            let elements = await decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .prefix(remainingValuesToRead)
             result.append(contentsOf: elements)
@@ -368,35 +366,35 @@ final class LogFileWriter<T> where T: MetricValue {
         return result
     }
 
-    func getFullHistory(maximumValueCount: Int? = nil) -> [Timestamped<T>] {
-       getAllLogFiles().map { decodeTimestampedStream(from: $0) }.joined().map { $0 }
+    func getFullHistory(maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
+        await getAllLogFiles().asyncMap { await self.decodeTimestampedStream(from: $0) }.joined().map { $0 }
     }
     
-    func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) -> Data {
-        let result = getHistoryData(startingFrom: start, upTo: end, maximumValueCount: maximumValueCount)
+    func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) async -> Data {
+        let result = await getHistoryData(startingFrom: start, upTo: end, maximumValueCount: maximumValueCount)
             .map { $0.data }
             .joined()
         return Data(result)
     }
     
-    private func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) -> [TimestampedEncodedData] {
+    private func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) async -> [TimestampedEncodedData] {
         let count = maximumValueCount ?? .max
         guard count > 0 else {
             return []
         }
         if start > end {
-            return getHistoryDataReversed(in: end...start, count: count)
+            return await getHistoryDataReversed(in: end...start, count: count)
         }
-        return getHistoryData(in: start...end, count: count)
+        return await getHistoryData(in: start...end, count: count)
     }
     
-    private func getHistoryData(in range: ClosedRange<Date>, count: Int) -> [TimestampedEncodedData] {
+    private func getHistoryData(in range: ClosedRange<Date>, count: Int) async -> [TimestampedEncodedData] {
         var remainingValuesToRead = count
         var result: [TimestampedEncodedData] = []
-        let files = getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
+        let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
         for file in files {
             // Opportunistically get history data, ignore file errors
-            let elements = getReadableElements(from: file.url)
+            let elements = await getReadableElements(from: file.url)
                 .filter { range.contains($0.date) }
                 .prefix(remainingValuesToRead)
             result.append(contentsOf: elements)
@@ -408,13 +406,13 @@ final class LogFileWriter<T> where T: MetricValue {
         return result
     }
     
-    private func getHistoryDataReversed(in range: ClosedRange<Date>, count: Int) -> [TimestampedEncodedData] {
+    private func getHistoryDataReversed(in range: ClosedRange<Date>, count: Int) async -> [TimestampedEncodedData] {
         var remainingValuesToRead = count
         var result: [TimestampedEncodedData] = []
-        let files = getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }.reversed()
+        let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }.reversed()
         for file in files {
             // Opportunistically get history data, ignore file errors
-            let elements = getReadableElements(from: file.url)
+            let elements = await getReadableElements(from: file.url)
                 .filter { range.contains($0.date) }
                 .suffix(remainingValuesToRead)
                 .reversed()
@@ -427,36 +425,36 @@ final class LogFileWriter<T> where T: MetricValue {
         return result
     }
     
-    private func decodeTimestampedStream(from url: URL) -> [Timestamped<T>] {
+    private func decodeTimestampedStream(from url: URL) async -> [Timestamped<T>] {
         guard exists(url) else {
-            logError("File \(url.lastPathComponent): Not found")
+            await logError("File \(url.lastPathComponent): Not found")
             return []
         }
         let data: Data
         do {
             data = try Data(contentsOf: url)
         } catch {
-            logError("File \(url.lastPathComponent): Failed to read: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to read: \(error)")
             return []
         }
         do {
-            return try extractElements(from: data, file: url.lastPathComponent)
+            return try await extractElements(from: data, file: url.lastPathComponent)
                 .map {
                     let valueData = $0.data.advanced(by: headerByteCount)
                     let value = try decoder.decode(T.self, from: valueData)
                     return .init(value: value, timestamp: $0.date)
                 }
         } catch {
-            logError("File \(url.lastPathComponent): Failed to decode: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to decode: \(error)")
             return []
         }
     }
 
-    private func getReadableElements(from url: URL) -> [TimestampedEncodedData] {
-        (try? getElements(from: url)) ?? []
+    private func getReadableElements(from url: URL) async -> [TimestampedEncodedData] {
+        (try? await getElements(from: url)) ?? []
     }
     
-    private func getElements(from url: URL) throws -> [TimestampedEncodedData] {
+    private func getElements(from url: URL) async throws -> [TimestampedEncodedData] {
         guard exists(url) else {
             return []
         }
@@ -464,32 +462,32 @@ final class LogFileWriter<T> where T: MetricValue {
         do {
             data = try Data(contentsOf: url)
         } catch {
-            logError("File \(url.lastPathComponent): Failed to read: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to read: \(error)")
             throw MetricError.failedToOpenLogFile
         }
-        return try extractElements(from: data, file: url.lastPathComponent)
+        return try await extractElements(from: data, file: url.lastPathComponent)
     }
     
-    private func extractElements(from data: Data, file: String) throws -> [TimestampedEncodedData] {
+    private func extractElements(from data: Data, file: String) async throws -> [TimestampedEncodedData] {
         var result: [TimestampedEncodedData] = []
         var currentIndex = data.startIndex
         while currentIndex < data.endIndex {
             let startIndexOfTimestamp = currentIndex + byteCountLength
             guard startIndexOfTimestamp <= data.endIndex else {
-                logError("File \(file): Only \(data.endIndex - currentIndex) bytes, needed \(byteCountLength) for byte count")
+                await logError("File \(file): Only \(data.endIndex - currentIndex) bytes, needed \(byteCountLength) for byte count")
                 throw MetricError.logFileCorrupted
             }
             guard let byteCount = UInt16(fromData: data[currentIndex..<startIndexOfTimestamp]) else {
-                logError("File \(file): Invalid byte count")
+                await logError("File \(file): Invalid byte count")
                 throw MetricError.logFileCorrupted
             }
             let nextIndex = startIndexOfTimestamp + Int(byteCount)
             guard nextIndex <= data.endIndex else {
-                logError("File \(file): Needed \(byteCountLength + Int(byteCount)) for timestamped value, has \(data.endIndex - startIndexOfTimestamp)")
+                await logError("File \(file): Needed \(byteCountLength + Int(byteCount)) for timestamped value, has \(data.endIndex - startIndexOfTimestamp)")
                 throw MetricError.logFileCorrupted
             }
             guard byteCount >= timestampLength else {
-                logError("File \(file): Only \(byteCount) bytes, needed \(timestampLength) for timestamp")
+                await logError("File \(file): Only \(byteCount) bytes, needed \(timestampLength) for timestamp")
                 throw MetricError.logFileCorrupted
             }
             let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+timestampLength]
@@ -504,43 +502,43 @@ final class LogFileWriter<T> where T: MetricValue {
 
     // MARK: Deleting history
 
-    private func deleteFile(at url: URL) throws {
+    private func deleteFile(at url: URL) async throws {
         guard exists(url) else {
             return
         }
         do {
             try fileManager.removeItem(at: url)
         } catch {
-            logError("File \(url.lastPathComponent): Failed to delete: \(error)")
+            await logError("File \(url.lastPathComponent): Failed to delete: \(error)")
             throw MetricError.failedToDeleteLogFile
         }
     }
 
-    func deleteHistory(before date: Date) throws {
+    func deleteHistory(before date: Date) async throws {
         // Prevent messing with open file
-        closeFile()
+        await closeFile()
 
         // Only select files containing items before the date
-        let files = getAllLogFilesWithIntervals().prefix { $0.range.upperBound < date }
+        let files = await getAllLogFilesWithIntervals().prefix { $0.range.upperBound < date }
         for (url, range) in files {
             if date < range.lowerBound {
                 // File contains only older entries
-                try deleteFile(at: url)
+                try await deleteFile(at: url)
                 // If an error is thrown here, then only the oldest history will be deleted,
                 // so at least no inconsistency
             } else {
                 // Delete some entries within file
-                try deleteElementsInFile(at: url, before: date)
+                try await deleteElementsInFile(at: url, before: date)
             }
         }
     }
 
-    private func deleteElementsInFile(at url: URL, before date: Date) throws {
-        let remainingElements = try getElements(from: url)
+    private func deleteElementsInFile(at url: URL, before date: Date) async throws {
+        let remainingElements = try await getElements(from: url)
             .drop { $0.date < date }
         guard let start = remainingElements.first?.date else {
             // No elements to keep, delete old file
-            try deleteFile(at: url)
+            try await deleteFile(at: url)
             return
         }
         let data = Data(remainingElements.map { $0.data }
@@ -551,16 +549,16 @@ final class LogFileWriter<T> where T: MetricValue {
         do {
             try data.write(to: newFileUrl)
         } catch {
-            logError("File \(newFileUrl.lastPathComponent): Failed to create updated history file: \(error)")
+            await logError("File \(newFileUrl.lastPathComponent): Failed to create updated history file: \(error)")
             throw MetricError.failedToOpenLogFile
         }
 
         // Delete old file
         do {
-            try deleteFile(at: url)
+            try await deleteFile(at: url)
         } catch {
             // Attempt to restore consistency by deleting new file
-            try? deleteFile(at: newFileUrl)
+            try? await deleteFile(at: newFileUrl)
             throw error
         }
     }

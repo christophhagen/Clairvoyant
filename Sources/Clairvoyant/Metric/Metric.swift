@@ -199,11 +199,11 @@ public actor Metric<T> where T: MetricValue {
      Calls to this function should be sparse, since reading a file from disk is expensive.
      - Returns: The last value of the metric, timestamped, or nil, if no value could be provided.
      */
-    public func lastValue() -> Timestamped<T>? {
+    public func lastValue() async -> Timestamped<T>? {
         if let _lastValue {
             return _lastValue
         }
-        return fileWriter.lastValue()
+        return await fileWriter.lastValue()
     }
 
     /**
@@ -212,8 +212,8 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged within the given date range.
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func history(in range: ClosedRange<Date>) -> [Timestamped<T>] {
-        fileWriter.getHistory(in: range)
+    public func history(in range: ClosedRange<Date>) async -> [Timestamped<T>] {
+        await fileWriter.getHistory(in: range)
     }
 
     /**
@@ -221,8 +221,8 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged for the metric
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func fullHistory() -> [Timestamped<T>] {
-        fileWriter.getFullHistory()
+    public func fullHistory() async -> [Timestamped<T>] {
+        await fileWriter.getFullHistory()
     }
 
     /**
@@ -252,7 +252,7 @@ public actor Metric<T> where T: MetricValue {
      */
     @discardableResult
     public func update(_ value: Timestamped<T>) async throws -> Bool {
-        if let lastValue = lastValue() {
+        if let lastValue = await lastValue() {
             guard value.value != lastValue.value else {
                 // Skip duplicate elements to save space
                 return false
@@ -263,7 +263,7 @@ public actor Metric<T> where T: MetricValue {
             }
         }
         if keepsLocalHistoryData {
-            try fileWriter.write(value)
+            try await fileWriter.write(value)
         }
         _lastValue = value
         await push(value)
@@ -281,7 +281,7 @@ public actor Metric<T> where T: MetricValue {
      */
     public func update<S>(_ values: S) async throws where S: Sequence, S.Element == Timestamped<T> {
         let sorted = values.sorted { $0.timestamp }
-        var lastValue = lastValue()
+        var lastValue = await lastValue()
         var valuesToPush: [Timestamped<T>] = []
         for element in sorted {
             if let lastValue {
@@ -295,14 +295,14 @@ public actor Metric<T> where T: MetricValue {
                 }
             }
             if keepsLocalHistoryData {
-                try fileWriter.writeOnlyToLog(element)
+                try await fileWriter.writeOnlyToLog(element)
             }
             valuesToPush.append(element)
             lastValue = element
         }
         _lastValue = lastValue
         if let lastValue {
-            _ = try? fileWriter.write(lastValue: lastValue)
+            _ = try? await fileWriter.write(lastValue: lastValue)
         }
         await push(valuesToPush)
     }
@@ -367,7 +367,7 @@ public actor Metric<T> where T: MetricValue {
 
     private func push(values: [Timestamped<T>], to remote: RemoteMetricObserver) async {
         // 1: Get all pending values
-        guard let data = try? fileWriter.encode(values) else {
+        guard let data = try? await fileWriter.encode(values) else {
             remoteObservers[remote] = values
             return
         }
@@ -410,10 +410,10 @@ public actor Metric<T> where T: MetricValue {
      - Parameter date: The date before which all values should be deleted.
      - Throws: `MetricError`
      */
-    public func deleteHistory(before date: Date) throws {
-        try fileWriter.deleteHistory(before: date)
-        if let last = lastValue()?.timestamp, last < date {
-            try fileWriter.deleteLastValueFile()
+    public func deleteHistory(before date: Date) async throws {
+        try await fileWriter.deleteHistory(before: date)
+        if let last = await lastValue()?.timestamp, last < date {
+            try await fileWriter.deleteLastValueFile()
             _lastValue = nil
         }
     }
@@ -437,11 +437,11 @@ extension Metric: AbstractMetric {
 
 extension Metric: GenericMetric {
 
-    public func lastValueData() -> Data? {
-        if let _lastValue, let data = try? fileWriter.encode(_lastValue) {
+    public func lastValueData() async -> Data? {
+        if let _lastValue, let data = try? await fileWriter.encode(_lastValue) {
             return data
         }
-        return fileWriter.lastValueData()
+        return await fileWriter.lastValueData()
     }
 
     public func addDataFromRemote(_ dataPoint: Data) async throws {
@@ -453,9 +453,9 @@ extension Metric: GenericMetric {
      The history of a metric in a specific range.
      - Returns: The encoded data points, i.e. [Timestamped<T>]
      */
-    public func encodedHistoryData(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) -> Data {
+    public func encodedHistoryData(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
         let range = startDate < endDate ? startDate...endDate : endDate...startDate
-        let values: [Timestamped<T>] = fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
-        return (try? fileWriter.encode(values)) ?? Data()
+        let values: [Timestamped<T>] = await fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
+        return (try? await fileWriter.encode(values)) ?? Data()
     }
 }
