@@ -1,6 +1,6 @@
 import Foundation
 
-public enum MetricType {
+public enum MetricType: RawRepresentable {
     case integer
     case double
     case boolean
@@ -10,7 +10,7 @@ public enum MetricType {
     case serverStatus
     case httpStatus
 
-    var stringDescription: String {
+    public var rawValue: String {
         switch self {
         case .integer:
             return "Int"
@@ -31,8 +31,8 @@ public enum MetricType {
         }
     }
 
-    init(stringDescription: String) {
-        switch stringDescription {
+    public init(rawValue: String) {
+        switch rawValue {
         case "Int": self = .integer
         case "Double": self = .double
         case "Bool": self = .boolean
@@ -41,7 +41,7 @@ public enum MetricType {
         case "Status": self = .serverStatus
         case "HTTP Status": self = .httpStatus
         default:
-            self = .customType(named: stringDescription)
+            self = .customType(named: rawValue)
         }
     }
 
@@ -68,6 +68,13 @@ public enum MetricType {
     }
 }
 
+extension MetricType: CustomStringConvertible {
+
+    public var description: String {
+        rawValue
+    }
+}
+
 extension MetricType: Equatable {
     
 }
@@ -76,11 +83,11 @@ extension MetricType: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(stringDescription)
+        try container.encode(rawValue)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(stringDescription: try container.decode(String.self))
+        self.init(rawValue: try container.decode(String.self))
     }
 }
