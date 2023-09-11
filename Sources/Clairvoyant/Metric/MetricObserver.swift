@@ -121,7 +121,37 @@ public final class MetricObserver {
     }
 
     /**
-     Get the
+     Remove a metric from this observer
+     - Parameter id: The id of the metric to remove
+     - Returns: `true`, if the metric was removed, or `false`, if no metric with the id existed.
+     */
+    @discardableResult
+    public func remove<T>(_ metric: Metric<T>) -> Bool {
+        remove(hash: metric.idHash)
+    }
+
+    /**
+     Remove a metric from this observer
+     - Parameter id: The id of the metric to remove
+     - Returns: `true`, if the metric was removed, or `false`, if no metric with the id existed.
+     */
+    @discardableResult
+    public func removeMetric(with id: MetricId) -> Bool {
+        remove(hash: id.hashed())
+    }
+
+    private func remove(hash: MetricIdHash) -> Bool {
+        if observedMetrics[hash] == nil {
+            return false
+        }
+        observedMetrics[hash] = nil
+        return true
+    }
+
+    /**
+     Get the info of a registered metric
+     - Parameter id: The id of the metric
+     - Returns: The info of the metric, or `nil`, if the metric doesn't exist
      */
     public func metricInfo(for id: MetricId) -> MetricInfo? {
         observedMetrics[id.hashed()]?.info
