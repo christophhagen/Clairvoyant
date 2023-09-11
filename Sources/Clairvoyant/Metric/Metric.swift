@@ -27,11 +27,6 @@ public actor Metric<T> where T: MetricValue {
      */
     nonisolated let idHash: MetricIdHash
 
-    /**
-     A reference to the collector of the metric for logging and processing.
-     */
-    private weak var observer: MetricObserver?
-
     /// The cached last value of the metric
     private var _lastValue: Timestamped<T>? = nil
 
@@ -89,15 +84,19 @@ public actor Metric<T> where T: MetricValue {
     }
 
     /**
-     Create a new metric.
+     Create a new metric from an observer.
+
+     This function is only called from within a `MetricObserver`, because it doesn't register the metric with the provided observer.
+
      - Parameter id: The unique id of the metric.
+     - Parameter observer: The metric observer calling this initializer
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter fileSize: The maximum size of files in bytes
      */
-    init(id: String, observer: MetricObserver, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
+    init(id: String, calledFromObserver observer: MetricObserver, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
         let info = MetricInfo(
             id: id,
             dataType: T.valueType,
@@ -110,22 +109,36 @@ public actor Metric<T> where T: MetricValue {
                   fileSize: fileSize)
     }
 
+    /**
+     Internal constructor, does not register with metric observer.
+     - Parameter info: A metric info
+     - Parameter fileSize: The maximum size of files in bytes
+     */
     private init(info: MetricInfo, observer: MetricObserver, fileSize: Int) {
         self.info = info
         let idHash = info.id.hashed()
         self.idHash = idHash
-        self.observer = observer
         self.fileWriter = .init(
             id: info.id,
             hash: idHash,
             folder: observer.logFolder,
             encoder: observer.encoder,
             decoder: observer.decoder,
-            fileSize: fileSize)
-        fileWriter.set(metric: self)
+            fileSize: fileSize,
+            logClosure: { [weak observer] message in
+                guard let observer else {
+                    print("[\(info.id)] " + message)
+                    return
+                }
+                await observer.log(message, for: info.id)
+            })
     }
 
-    init(unobserved id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
+    /**
+     Create a new log metric for a `MetricObserver`
+     - Note: This constructor does not link back to an observer for logging errors, since this would just divert back to the this metric again.
+     */
+    init(logId id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
         self.info = .init(
             id: id,
             dataType: T.valueType,
@@ -135,15 +148,16 @@ public actor Metric<T> where T: MetricValue {
             description: description)
         let idHash = id.hashed()
         self.idHash = idHash
-        self.observer = nil
         self.fileWriter = .init(
             id: id,
             hash: idHash,
             folder: logFolder,
             encoder: encoder,
             decoder: decoder,
-            fileSize: fileSize)
-        fileWriter.set(metric: self)
+            fileSize: fileSize,
+            logClosure: { message in
+                print("[\(id)] " + message)
+            })
     }
 
     /**
@@ -155,19 +169,21 @@ public actor Metric<T> where T: MetricValue {
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter fileSize: The maximum size of files in bytes
+     - Note: This initializer crashes with a `fatalError`, if `MetricObserver.standard` has not been set.
+     - Note: This initializer crashes with a `fatalError`, if a metric with the same `id` is already registered with the observer.
      */
-    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) throws {
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) {
         guard let observer = MetricObserver.standard else {
-            throw MetricError.noObserver
+            fatalError("Initialize the standard observer first by setting `MetricObserver.standard` before creating a metric")
         }
-        self.init(
+        let info = MetricInfo(
             id: id,
-            observer: observer,
+            dataType: T.valueType,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
-            description: description,
-            fileSize: fileSize)
+            description: description)
+        self.init(info: info, observer: observer, fileSize: fileSize)
         observer.observe(self)
     }
 
@@ -175,21 +191,23 @@ public actor Metric<T> where T: MetricValue {
      Create a new metric.
      - Parameter info: A metric info
      - Parameter fileSize: The maximum size of files in bytes
+     - Note: This initializer crashes with a `fatalError`, if `MetricObserver.standard` has not been set.
+     - Note: This initializer crashes with a `fatalError`, if `info.dataType` does not match `T.valueType`
+     - Note: This initializer crashes with a `fatalError`, if a metric with the same `id` is already registered with the observer.
      */
-    public init(_ info: MetricInfo, fileSize: Int = 10_000_000) async throws {
+    public init(_ info: MetricInfo, fileSize: Int = 10_000_000) async {
+        guard info.dataType == T.valueType else {
+            fatalError("Creating metric of type `\(T.self)` with mismatching data type '\(info.dataType)'")
+        }
         guard let observer = MetricObserver.standard else {
-            throw MetricError.noObserver
+            fatalError("Initialize the standard observer first by setting `MetricObserver.standard` before creating a metric")
         }
         self.init(info: info, observer: observer, fileSize: fileSize)
         observer.observe(self)
     }
 
-    func log(_ message: String) async {
-        guard let observer else {
-            print("[\(id)] \(message)")
-            return
-        }
-        await observer.log(message, for: id)
+    private func log(_ message: String) async {
+        await fileWriter.logClosure(message)
     }
 
     /**
@@ -268,10 +286,6 @@ public actor Metric<T> where T: MetricValue {
         _lastValue = value
         await push(value)
         return true
-    }
-
-    public func removeFromObserver() async {
-        await observer?.remove(self)
     }
 
     /**
@@ -421,18 +435,6 @@ public actor Metric<T> where T: MetricValue {
 
 extension Metric: AbstractMetric {
 
-
-    nonisolated var dataType: MetricType {
-        T.valueType
-    }
-
-    func getObserver() -> MetricObserver? {
-        observer
-    }
-
-    func set(observer: MetricObserver?) {
-        self.observer = observer
-    }
 }
 
 extension Metric: GenericMetric {

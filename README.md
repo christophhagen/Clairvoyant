@@ -42,13 +42,45 @@ Metrics are identified by a unique identifier string.
 import Clairvoyant
 ```
 
+### Metric observer
+
+Before creating metrics, a `MetricObserver` must exist to managing different metrics and provide a common storage location.
+To create an observer, we have to provide a directory where the logging data can be written.
+It also internally writes all errors to a `Metric<String>` with the `id` provided by the parameter `logMetricId`.
+
+```swift
+let url: URL = ...
+let observer = MetricObserver(logFolder: url, logMetricId: "test.log")
+```
+
+The logging metric can later be read in the same way as other metrics.
+It's also possible to add additional log entries.
+
+```swift
+await observer.log("Something happened")
+```
+
+Metrics can then be created on the observer:
+
+```
+let metric = observer.addMetric(id: "MyCounter", containing: Int.self)
+
+There is a static property on `MetricObserver` to add metrics to by default:
+
+```swift
+MetricObserver.standard = observer
+let metric = Metric("MyCounter", containing: Int.self) // Automatically added to `observer`
+```
+
+Note: A fatal error will be produced if the metric initializer is used without a standard observer.
+
 ### Metrics
 
-Let's first create a metric before discussing logging and access control.
 Metrics are written as Swift `Actor`s, so they are thread-safe, but require an asynchronous context.
 
 ```swift
-let metric: Metric<Int> = try await Metric("myMetric")
+let metric: Metric<Int> = Metric("myMetric")
+let other = Metric("MyOtherMetric", containing: Bool.self)
 ```
 
 Once a metric is created, it can be updated with new values:
@@ -76,43 +108,6 @@ let lastValues: [Timestamped<Int>] = try await metric.getHistory(in: range)
 ```
 
 These functions represent the basic interaction with a metric on the creator side.
-
-### Metric observer
-
-A `Metric` requires a `MetricObserver` to receive the data and process it.
-The observer is responsible for managing different metrics, and provide a common storage location.
-To create an observer, we have to provide a directory where the logging data can be written.
-It also internally writes all errors to a `Metric<String>` with the `id` provided by the parameter `logMetricId`.
-
-```swift
-let url: URL = ...
-let observer = MetricObserver(logFolder: url, logMetricId: "test.log")
-```
-
-The logging metric can later be read in the same way as other metrics.
-It's also possible to add additional log entries.
-
-```swift
-await observer.log("Something happened")
-```
-
-The observer is now ready to handle metrics, so the previously created metric can be added to it.
-
-```swift
-observer.observe(metric)
-```
-
-It's also possible to directly create metrics on the observer:
-```swift
-let metric: Metric<Int> = observer.addMetric("MyCounter")
-```
-
-There is a static property on `MetricObserver` to add metrics to by default:
-
-```swift
-MetricObserver.standard = observer
-let metric = Metric("metric", containing: Int.self) // Automatically added to `observer`
-```
 
 ### Complex types
 

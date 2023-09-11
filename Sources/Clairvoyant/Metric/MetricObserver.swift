@@ -70,7 +70,7 @@ public final class MetricObserver {
             self.maximumFileSizeInBytes = fileSize
             self.logFolder = logFolder
             self.logMetric = .init(
-                unobserved: logMetricId,
+                logId: logMetricId,
                 name: logMetricName,
                 description: logMetricDescription,
                 canBeUpdatedByRemote: false,
@@ -79,8 +79,7 @@ public final class MetricObserver {
                 encoder: encoder,
                 decoder: decoder,
                 fileSize: fileSize)
-            // No previous metrics, so observing can't fail
-            observe(logMetric)
+            observedMetrics[logMetric.idHash] = logMetric
     }
 
     // MARK: Adding metrics
@@ -88,47 +87,44 @@ public final class MetricObserver {
     /**
      Create a metric and add it to the observer.
      - Parameter id: The id of the metric.
+     - Parameter type: The type of the metric
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
-     - Returns: The created metric.
+     - Returns: The created or existing metric.
+     - Note: If a metric with the same `id` and `type` already exists, then this one is returned. Other properties (`name`, `description`, ...) are then ignored.
      */
-    public func addMetric<T>(id: String, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true) -> Metric<T> where T: MetricValue {
+    public func addMetric<T>(id: String, containing type: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true) -> Metric<T> where T: MetricValue {
+        if let existing = observedMetrics[id.hashed()] {
+            guard let same = existing as? Metric<T> else {
+                fatalError("Two metrics with same id '\(id)' but different types where added to the same observer")
+            }
+            return same
+        }
         let metric = Metric<T>(
             id: id,
-            observer: self,
+            calledFromObserver: self,
             canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name, description: description,
             fileSize: maximumFileSizeInBytes)
-        observe(metric)
+        observedMetrics[metric.idHash] = metric
         return metric
     }
 
-    /**
-     Remove a metric from this observer.
-
-     The metric will no longer be exposed or accessible through this server, but the file data associated with the metric is not deleted.
-     A metric should not be used without an observer. It can continue to record updates, but the updates will not be pushed to remote servers, logging of errors does no longer work, and the data will not be accessible through the observer.
-
-     If the metric is not registered with this observer, then this function does nothing.
-     - Note: Once a metric is removed, it can't be added again.
-     - Parameter metric: The metric to remove.
-     */
-    public func remove<T>(_ metric: Metric<T>) async where T: MetricValue {
-        guard let old = observedMetrics[metric.idHash] else {
-            return
-        }
-        await old.set(observer: nil)
-        observedMetrics[metric.idHash] = nil
-    }
-
-    func observe(_ metric: AbstractMetric) {
+    func observe<T>(_ metric: Metric<T>) where T: MetricValue {
         guard observedMetrics[metric.idHash] == nil else {
-            fatalError("A metric with id '\(metric.id)' was added twice to the same observer")
+            fatalError("Two metrics with same id '\(metric.id)' where added to the same observer")
         }
         observedMetrics[metric.idHash] = metric
+    }
+
+    /**
+     Get the
+     */
+    public func metricInfo(for id: MetricId) -> MetricInfo? {
+        observedMetrics[id.hashed()]?.info
     }
 
     /**
@@ -138,7 +134,7 @@ public final class MetricObserver {
      - Parameter type: The type of the metric
      - Returns: The metric, or `nil`, if no metric with the given id exists, or the type doesn't match
      */
-    public func getMetric<T>(id: String, type: T.Type = T.self) -> Metric<T>? where T: MetricValue {
+    public func getMetric<T>(id: MetricId, type: T.Type = T.self) -> Metric<T>? where T: MetricValue {
         observedMetrics[id.hashed()] as? Metric<T>
     }
 

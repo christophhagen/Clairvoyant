@@ -44,14 +44,6 @@ final class ClairvoyantTests: XCTestCase {
         _ = createObserver()
     }
 
-    func testCreateMetricNoObserver() async throws {
-        do {
-            _ = try Metric<Int>("myInt")
-        } catch MetricError.noObserver {
-
-        }
-    }
-
     func getIntMetricAndObserver() -> (metric: Metric<Int>, observer: MetricObserver) {
         let observer = createObserver()
         let metric: Metric<Int> = observer.addMetric(id: "myInt")
@@ -62,10 +54,10 @@ final class ClairvoyantTests: XCTestCase {
         _ = getIntMetricAndObserver()
     }
 
-    func testCreateMetricBootstrapped() async throws {
+    func testCreateMetricBootstrapped() async {
         let observer = createObserver()
         MetricObserver.standard = observer
-        _ = try Metric<Int>("myInt")
+        _ = Metric<Int>("myInt")
     }
 
     func testUpdatingMetric() async throws {
@@ -115,7 +107,7 @@ final class ClairvoyantTests: XCTestCase {
     func testClientHistoryDecoding() async throws {
         let observer = createObserver(logId: "test.log")
         MetricObserver.standard = observer
-        let metric = try Metric<Int>("test.int")
+        let metric = Metric<Int>("test.int")
 
         let start = Date()
         let input = [0,1,2]

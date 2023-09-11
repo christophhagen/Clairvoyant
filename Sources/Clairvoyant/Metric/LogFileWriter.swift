@@ -17,8 +17,7 @@ final class LogFileWriter<T> where T: MetricValue {
     
     let metricIdHash: MetricIdHash
 
-    /// The reference to the metric for error logging.
-    private weak var metric: AbstractMetric?
+    var logClosure: (String) async -> Void
     
     private let encoder: BinaryEncoder
     
@@ -37,7 +36,7 @@ final class LogFileWriter<T> where T: MetricValue {
     /// The internal file manager used to access files
     let fileManager: FileManager = .default
     
-    init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
+    init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int, logClosure: @escaping (String) async -> Void) {
         let metricFolder = folder.appendingPathComponent(hash)
         self.metricId = id
         self.metricIdHash = hash
@@ -46,25 +45,15 @@ final class LogFileWriter<T> where T: MetricValue {
         self.encoder = encoder
         self.decoder = decoder
         self.maximumFileSizeInBytes = fileSize
+        self.logClosure = logClosure
     }
     
     deinit {
         try? handle?.close()
     }
-
-    /**
-     Set the reference to the metric for error handling.
-     */
-    func set(metric: AbstractMetric) {
-        self.metric = metric
-    }
     
     private func logError(_ message: String) async {
-        guard let metric else {
-            print("[\(metricId)] \(message)")
-            return
-        }
-        await metric.log(message)
+        await logClosure(message)
     }
     
     // MARK: URLs
