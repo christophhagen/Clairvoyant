@@ -103,7 +103,7 @@ The `Timestamped<T>` struct wraps a value with a timestamp to create a point in 
 That makes it possible to order values chronologically, and to obtain values within a specific interval.
 
 ```swift
-let range = Date().addintTimeInterval(-100)...Date() // last 100 seconds
+let range = Date().addingTimeInterval(-100)...Date() // last 100 seconds
 let lastValues: [Timestamped<Int>] = try await metric.getHistory(in: range)
 ```
 
