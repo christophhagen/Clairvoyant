@@ -9,8 +9,18 @@ public protocol GenericMetric {
      */
     var id: MetricId { get }
 
+    /// The information about the metric
+    var info: MetricInfo { get }
+
+    /// Indicate that the metric value can be set via remote access
     var canBeUpdatedByRemote: Bool { get }
 
+    /**
+     Get the last value data of the metric.
+
+     The data contains a `Timestamped<T>`, where T is the Swift type associated with `info.dataType`.
+     - Returns: The encoded data of the last timestamped value.
+     */
     func lastValueData() async -> Data?
 
     /**
