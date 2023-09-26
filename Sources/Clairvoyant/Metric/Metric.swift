@@ -284,7 +284,9 @@ public actor Metric<T> where T: MetricValue {
             try await fileWriter.write(value)
         }
         _lastValue = value
-        await push(value)
+        // TODO: Perform this on a separate queue?
+        // It may greatly increase the time needed to finish updating the value
+        await notifyRemoteObservers()
         return true
     }
 
@@ -318,84 +320,50 @@ public actor Metric<T> where T: MetricValue {
         if let lastValue {
             _ = try? await fileWriter.write(lastValue: lastValue)
         }
-        await push(valuesToPush)
+        // TODO: Perform this on a separate queue?
+        // It may greatly increase the time needed to finish updating the value
+        await notifyRemoteObservers()
     }
 
-    // MARK: Pushing to remotes
+    // MARK: Remote notifications
 
-    /// The remote observers of the metric, with the pending data points for each
-    private var remoteObservers: [RemoteMetricObserver : [Timestamped<T>]] = [:]
-
-    /**
-     Indicate if there are any values not transmitted to remote observers.
-     */
-    func hasPendingUpdatesForRemoteObservers() -> Bool {
-        remoteObservers.values.contains { !$0.isEmpty }
-    }
+    /// The remote observers of the metric
+    private var remoteObservers: Set<RemoteMetricObserver> = []
 
     /**
-     Add a remote to receive all updates to the metric.
+     Add a remote to receive notifications when an update to the metric occurs.
 
      The remote observer must be an instance of a `MetricObserver` exposed through Vapor.
      - SeeAlso: Check the documentation about `ClairvoyantVapor` on how to setup `Vapor` with `Clairvoyant`
+     - Note: Observers are distinguished by their url, and only one observer can be presented for each unique url.
+     - Returns: `true`, if the observer was added. `false`, if an observer for the same url already exists.
      */
-    public func addRemoteObserver(_ remoteObserver: RemoteMetricObserver) {
-        guard remoteObservers[remoteObserver] == nil else {
-            return
-        }
-        remoteObservers[remoteObserver] = []
+    @discardableResult
+    public func addRemoteObserver(_ remoteObserver: RemoteMetricObserver) -> Bool {
+        remoteObservers.insert(remoteObserver).inserted
     }
-
-    // MARK: Remote push
 
     /**
      Try to send all pending values to remote observers.
-     If there are no pending values, then no request is made.
+
+     - Note: This function is called automatically when the metric value changes.
+     There is usually no need to call this function manually.
      */
-    public func pushPendingDataToRemoteObservers() async {
-        guard hasPendingUpdatesForRemoteObservers() else {
-            return
-        }
-        await push([])
-    }
-
-    private func push(_ value: Timestamped<T>) async {
-        await push([value])
-    }
-
-    private func push(_ values: [Timestamped<T>]) async {
+    public func notifyRemoteObservers() async {
         guard !remoteObservers.isEmpty else {
             return
         }
         await withTaskGroup(of: Void.self) { group in
-            for (observer, pending) in remoteObservers {
-                guard !values.isEmpty || !pending.isEmpty else {
-                    continue
-                }
+            for observer in remoteObservers {
                 group.addTask {
-                    await self.push(values: pending + values, to: observer)
+                    await self.push(to: observer)
                 }
             }
         }
     }
 
-    private func push(values: [Timestamped<T>], to remote: RemoteMetricObserver) async {
-        // 1: Get all pending values
-        guard let data = try? await fileWriter.encode(values) else {
-            remoteObservers[remote] = values
-            return
-        }
-        // 2: Attempt transmission
-        guard await self.push(_data: data, toRemoteObserver: remote) else {
-            remoteObservers[remote] = values
-            return
-        }
-
-        // 3: Remove successful transmissions
-        remoteObservers[remote] = []
-    }
-
-    private func push(_data: Data, toRemoteObserver remoteObserver: RemoteMetricObserver) async -> Bool {
+    @discardableResult
+    private func push(to remoteObserver: RemoteMetricObserver) async -> Bool {
         let remoteUrl = remoteObserver.remoteUrl
         do {
             let url = remoteUrl.appendingPathComponent("push/\(idHash)")
