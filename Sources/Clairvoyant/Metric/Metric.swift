@@ -369,7 +369,7 @@ public actor Metric<T> where T: MetricValue {
             let url = remoteUrl.appendingPathComponent("push/\(idHash)")
             var request = URLRequest(url: url)
             request.setValue(remoteObserver.authenticationToken, forHTTPHeaderField: "token")
-            let (_, response) = try await urlSessionData(.shared, for: request)
+            let (_, response) = try await URLSession.shared.data(for: request)
             guard let response = response as? HTTPURLResponse else {
                 await log("Invalid response pushing value to \(remoteUrl.path): \(response)")
                 return false
