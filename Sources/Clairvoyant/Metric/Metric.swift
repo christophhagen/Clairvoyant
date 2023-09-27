@@ -330,6 +330,17 @@ public actor Metric<T> where T: MetricValue {
     /// The remote observers of the metric
     private var remoteObservers: Set<RemoteMetricObserver> = []
 
+    /// The timeout (in seconds) for requests to notify remote observers
+    private(set) public var remoteObserverNotificationTimeout: TimeInterval = 10.0
+
+    /**
+     Set the timeout for requests to update remote observers.
+     - Parameter timeout: The timeout in seconds.
+     */
+    public func setRemoteNotificationTimeout(_ timeout: TimeInterval) {
+        remoteObserverNotificationTimeout = timeout
+    }
+
     /**
      Add a remote to receive notifications when an update to the metric occurs.
 
@@ -346,28 +357,30 @@ public actor Metric<T> where T: MetricValue {
     /**
      Try to send all pending values to remote observers.
 
+     - Parameter timeout: The time to wait for each request to complete. Uses ``remoteObserverNotificationTimeout`` if unset
      - Note: This function is called automatically when the metric value changes.
      There is usually no need to call this function manually.
      */
-    public func notifyRemoteObservers() async {
+    public func notifyRemoteObservers(timeout: TimeInterval? = nil) async {
         guard !remoteObservers.isEmpty else {
             return
         }
         await withTaskGroup(of: Void.self) { group in
             for observer in remoteObservers {
                 group.addTask {
-                    await self.push(to: observer)
+                    await self.push(to: observer, timeout: timeout)
                 }
             }
         }
     }
 
     @discardableResult
-    private func push(to remoteObserver: RemoteMetricObserver) async -> Bool {
+    private func push(to remoteObserver: RemoteMetricObserver, timeout: TimeInterval?) async -> Bool {
         let remoteUrl = remoteObserver.remoteUrl
         do {
             let url = remoteUrl.appendingPathComponent("push/\(idHash)")
             var request = URLRequest(url: url)
+            request.timeoutInterval = timeout ?? remoteObserverNotificationTimeout
             request.setValue(remoteObserver.authenticationToken, forHTTPHeaderField: "token")
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let response = response as? HTTPURLResponse else {
