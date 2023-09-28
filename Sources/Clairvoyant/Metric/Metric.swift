@@ -378,7 +378,8 @@ public actor Metric<T> where T: MetricValue {
     private func push(to remoteObserver: RemoteMetricObserver, timeout: TimeInterval?) async -> Bool {
         let remoteUrl = remoteObserver.remoteUrl
         do {
-            let url = remoteUrl.appendingPathComponent("push/\(idHash)")
+            let route = ServerRoute.pushValueToMetric(idHash)
+            let url = remoteUrl.appendingPathComponent(route.rawValue)
             var request = URLRequest(url: url)
             request.timeoutInterval = timeout ?? remoteObserverNotificationTimeout
             request.setValue(remoteObserver.authenticationToken, forHTTPHeaderField: "token")
