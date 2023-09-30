@@ -73,7 +73,6 @@ public final class MetricObserver {
                 logId: logMetricId,
                 name: logMetricName,
                 description: logMetricDescription,
-                canBeUpdatedByRemote: false,
                 keepsLocalHistoryData: true,
                 logFolder: logFolder,
                 encoder: encoder,
@@ -91,11 +90,10 @@ public final class MetricObserver {
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
-     - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Returns: The created or existing metric.
      - Note: If a metric with the same `id` and `type` already exists, then this one is returned. Other properties (`name`, `description`, ...) are then ignored.
      */
-    public func addMetric<T>(id: String, containing type: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true) -> Metric<T> where T: MetricValue {
+    public func addMetric<T>(id: String, containing type: T.Type = T.self, name: String? = nil, description: String? = nil, keepsLocalHistoryData: Bool = true) -> Metric<T> where T: MetricValue {
         if let existing = observedMetrics[id.hashed()] {
             guard let same = existing as? Metric<T> else {
                 fatalError("Two metrics with same id '\(id)' but different types where added to the same observer")
@@ -105,7 +103,6 @@ public final class MetricObserver {
         let metric = Metric<T>(
             id: id,
             calledFromObserver: self,
-            canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name, description: description,
             fileSize: maximumFileSizeInBytes)

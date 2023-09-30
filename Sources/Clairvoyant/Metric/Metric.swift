@@ -3,6 +3,8 @@ import Foundation
 import FoundationNetworking
 #endif
 
+public typealias MetricChangeCallback<T> = (Timestamped<T>) -> Void
+
 /**
  A metric is a single piece of state that is provided by an application.
  Changes to the state can be used to update the metric,
@@ -32,10 +34,7 @@ public actor Metric<T> where T: MetricValue {
 
     private let fileWriter: LogFileWriter<T>
 
-    /// Indicate if the metric can be updated by a remote user
-    public nonisolated var canBeUpdatedByRemote: Bool {
-        info.canBeUpdatedByRemote
-    }
+    private var changeCallbacks: [MetricChangeCallback<T>] = []
 
     /**
      Indicates that the metric writes values to disk locally.
@@ -90,17 +89,15 @@ public actor Metric<T> where T: MetricValue {
 
      - Parameter id: The unique id of the metric.
      - Parameter observer: The metric observer calling this initializer
-     - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
      - Parameter fileSize: The maximum size of files in bytes
      */
-    init(id: String, calledFromObserver observer: MetricObserver, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
+    init(id: String, calledFromObserver observer: MetricObserver, keepsLocalHistoryData: Bool, name: String?, description: String?, fileSize: Int) {
         let info = MetricInfo(
             id: id,
             dataType: T.valueType,
-            canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
@@ -138,11 +135,10 @@ public actor Metric<T> where T: MetricValue {
      Create a new log metric for a `MetricObserver`
      - Note: This constructor does not link back to an observer for logging errors, since this would just divert back to the this metric again.
      */
-    init(logId id: String, name: String?, description: String?, canBeUpdatedByRemote: Bool, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
+    init(logId id: String, name: String?, description: String?, keepsLocalHistoryData: Bool, logFolder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int) {
         self.info = .init(
             id: id,
             dataType: T.valueType,
-            canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
@@ -166,20 +162,18 @@ public actor Metric<T> where T: MetricValue {
      - Parameter dataType: The raw type of the values contained in the metric
      - Parameter name: A descriptive name of the metric
      - Parameter description: A textual description of the metric
-     - Parameter canBeUpdatedByRemote: Indicate if the metric can be set through the Web API
      - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
      - Parameter fileSize: The maximum size of files in bytes
      - Note: This initializer crashes with a `fatalError`, if `MetricObserver.standard` has not been set.
      - Note: This initializer crashes with a `fatalError`, if a metric with the same `id` is already registered with the observer.
      */
-    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, canBeUpdatedByRemote: Bool = false, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) {
+    public init(_ id: String, containing dataType: T.Type = T.self, name: String? = nil, description: String? = nil, keepsLocalHistoryData: Bool = true, fileSize: Int = 10_000_000) {
         guard let observer = MetricObserver.standard else {
             fatalError("Initialize the standard observer first by setting `MetricObserver.standard` before creating a metric")
         }
         let info = MetricInfo(
             id: id,
             dataType: T.valueType,
-            canBeUpdatedByRemote: canBeUpdatedByRemote,
             keepsLocalHistoryData: keepsLocalHistoryData,
             name: name,
             description: description)
@@ -284,9 +278,7 @@ public actor Metric<T> where T: MetricValue {
             try await fileWriter.write(value)
         }
         _lastValue = value
-        // TODO: Perform this on a separate queue?
-        // It may greatly increase the time needed to finish updating the value
-        await notifyRemoteObservers()
+        changeCallbacks.forEach { $0(value) }
         return true
     }
 
@@ -319,83 +311,7 @@ public actor Metric<T> where T: MetricValue {
         _lastValue = lastValue
         if let lastValue {
             _ = try? await fileWriter.write(lastValue: lastValue)
-        }
-        // TODO: Perform this on a separate queue?
-        // It may greatly increase the time needed to finish updating the value
-        await notifyRemoteObservers()
-    }
-
-    // MARK: Remote notifications
-
-    /// The remote observers of the metric
-    private var remoteObservers: Set<RemoteMetricObserver> = []
-
-    /// The timeout (in seconds) for requests to notify remote observers
-    private(set) public var remoteObserverNotificationTimeout: TimeInterval = 10.0
-
-    /**
-     Set the timeout for requests to update remote observers.
-     - Parameter timeout: The timeout in seconds.
-     */
-    public func setRemoteNotificationTimeout(_ timeout: TimeInterval) {
-        remoteObserverNotificationTimeout = timeout
-    }
-
-    /**
-     Add a remote to receive notifications when an update to the metric occurs.
-
-     The remote observer must be an instance of a `MetricObserver` exposed through Vapor.
-     - SeeAlso: Check the documentation about `ClairvoyantVapor` on how to setup `Vapor` with `Clairvoyant`
-     - Note: Observers are distinguished by their url, and only one observer can be presented for each unique url.
-     - Returns: `true`, if the observer was added. `false`, if an observer for the same url already exists.
-     */
-    @discardableResult
-    public func addRemoteObserver(_ remoteObserver: RemoteMetricObserver) -> Bool {
-        remoteObservers.insert(remoteObserver).inserted
-    }
-
-    /**
-     Try to send all pending values to remote observers.
-
-     - Parameter timeout: The time to wait for each request to complete. Uses ``remoteObserverNotificationTimeout`` if unset
-     - Note: This function is called automatically when the metric value changes.
-     There is usually no need to call this function manually.
-     */
-    public func notifyRemoteObservers(timeout: TimeInterval? = nil) async {
-        guard !remoteObservers.isEmpty else {
-            return
-        }
-        await withTaskGroup(of: Void.self) { group in
-            for observer in remoteObservers {
-                group.addTask {
-                    await self.push(to: observer, timeout: timeout)
-                }
-            }
-        }
-    }
-
-    @discardableResult
-    private func push(to remoteObserver: RemoteMetricObserver, timeout: TimeInterval?) async -> Bool {
-        let remoteUrl = remoteObserver.remoteUrl
-        do {
-            let route = ServerRoute.pushValueToMetric(idHash)
-            let url = remoteUrl.appendingPathComponent(route.rawValue)
-            var request = URLRequest(url: url)
-            request.timeoutInterval = timeout ?? remoteObserverNotificationTimeout
-            request.setValue(remoteObserver.authenticationToken, forHTTPHeaderField: "token")
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let response = response as? HTTPURLResponse else {
-                await log("Invalid response pushing value to \(remoteUrl.path): \(response)")
-                return false
-            }
-            guard response.statusCode == 200 else {
-                await log("Failed to push value to \(remoteUrl.path): Response \(response.statusCode)")
-                return false
-            }
-            return true
-        } catch {
-            await log("Failed to push value to \(remoteUrl.path): \(error)")
-            return false
+            changeCallbacks.forEach { $0(lastValue) }
         }
     }
 
@@ -412,6 +328,16 @@ public actor Metric<T> where T: MetricValue {
             try await fileWriter.deleteLastValueFile()
             _lastValue = nil
         }
+    }
+
+    // MARK: Change callbacks
+
+    public func onChange(perform callback: @escaping MetricChangeCallback<T>) {
+        changeCallbacks.append(callback)
+    }
+
+    public func removeAllChangeListeners() {
+        changeCallbacks.removeAll()
     }
 }
 

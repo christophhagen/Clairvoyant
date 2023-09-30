@@ -12,9 +12,6 @@ public protocol GenericMetric {
     /// The information about the metric
     var info: MetricInfo { get }
 
-    /// Indicate that the metric value can be set via remote access
-    var canBeUpdatedByRemote: Bool { get }
-
     /**
      Get the last value data of the metric.
 

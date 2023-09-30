@@ -144,19 +144,6 @@ try await metric.update(newPlayer)
 Logging values to disk is great, but the data should also be available for inspection and monitoring.
 Clairvoyant provides a separate package [ClairvoyantVapor](https://github.com/christophhagen/ClairvoyantVapor) to integrate metric access into Vapor servers.
 
-### Receiving from other servers
-
-To receive a metric pushed from a remote server, configure a metric with `canBeUpdatedByRemote = true`. Any time a new value is received the metric will be updated with this value.
-The last value as well as history data can be accessed as with any other metric.
-
-### Pushing to other servers
-
-Metrics can be configured to automatically transmit the logged values to a remote server for monitoring or persistence.
-To configure this feature, one or more `RemoteMetricObserver`s can be added to each metric.
-Whenever a new value is set, then the metric attempts to send all pending updates (including any previously failed values) to the remote observer using the `push` route specified above.
-
-The remote server must have a metric with the same `id` registered with the observer, and the metric must be configured with `canBeUpdatedByRemote = true`.
-
 ## Initial requirements
 
 **Allow publishing of individual metrics** *Implemented*
