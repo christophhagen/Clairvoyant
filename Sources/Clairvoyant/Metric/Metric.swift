@@ -27,7 +27,7 @@ public actor Metric<T> where T: MetricValue {
      It is only available internally, since it is not required by the public interface.
      Hashing is performed to prevent special characters from creating issues with file paths.
      */
-    nonisolated let idHash: MetricIdHash
+    public nonisolated let idHash: MetricIdHash
 
     /// The cached last value of the metric
     private var _lastValue: Timestamped<T>? = nil
