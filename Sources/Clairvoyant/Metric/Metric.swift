@@ -347,6 +347,10 @@ extension Metric: AbstractMetric {
 
 extension Metric: GenericMetric {
 
+    public func lastUpdate() async -> Date? {
+        await lastValue()?.timestamp
+    }
+
     public func lastValueData() async -> Data? {
         if let _lastValue, let data = try? await fileWriter.encode(_lastValue) {
             return data

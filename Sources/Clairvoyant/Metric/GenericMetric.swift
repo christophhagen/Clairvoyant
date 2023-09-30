@@ -20,6 +20,8 @@ public protocol GenericMetric {
      */
     func lastValueData() async -> Data?
 
+    func lastUpdate() async -> Date?
+
     /**
      Update a metric with data received from a remote
      - Note: This function is only called if the remote allows remote updating

@@ -162,7 +162,7 @@ public final class MetricObserver {
      - Returns: The metric, or `nil`, if no metric with the given id exists, or the type doesn't match
      */
     public func getMetric<T>(id: MetricId, type: T.Type = T.self) -> Metric<T>? where T: MetricValue {
-        observedMetrics[id.hashed()] as? Metric<T>
+        observedMetrics.values.first(where: { $0.id == id }) as? Metric<T>
     }
 
     // MARK: Logging
