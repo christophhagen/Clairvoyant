@@ -18,7 +18,14 @@ public protocol AsyncScheduler {
 /**
  The standard handler for asynchronous operations based on Swift `Task`s.
  */
-public struct AsyncTaskScheduler: AsyncScheduler {
+public struct AsyncTaskScheduler {
+
+    public init() {
+
+    }
+}
+
+extension AsyncTaskScheduler: AsyncScheduler {
 
     public func schedule(asyncJob: @escaping @Sendable () async throws -> Void) {
         Task {
