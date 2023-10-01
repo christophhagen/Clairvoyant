@@ -20,14 +20,19 @@ public protocol GenericMetric {
      */
     func lastValueData() async -> Data?
 
+    /**
+     Get the timestamp of the current last value.
+     - Returns: The timestamp of the last value
+     */
     func lastUpdate() async -> Date?
 
     /**
      Update a metric with data received from a remote
-     - Note: This function is only called if the remote allows remote updating
+     - Note: This function is only called if the remote is marked to track a remote metric
      - Parameter data: The encoded data points, as an array of timestamped values
+     - Returns: A tuple with the number of data points in the provided data, and the timestamp of the current last value
      */
-    func addDataFromRemote(_ data: Data) async throws
+    func addDataFromRemote(_ data: Data) async throws -> (added: Int, lastUpdate: Date?)
 
     /**
      The history of a metric in a specific range.

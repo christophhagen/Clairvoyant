@@ -358,9 +358,14 @@ extension Metric: GenericMetric {
         return await fileWriter.lastValueData()
     }
 
-    public func addDataFromRemote(_ dataPoint: Data) async throws {
+    public func addDataFromRemote(_ dataPoint: Data) async throws -> (added: Int, lastUpdate: Date?) {
         let values = try fileWriter.decodeTimestampedValues(from: dataPoint)
         try await update(values)
+        if let lastUpdate = values.last?.timestamp {
+            return (added: values.count, lastUpdate: lastUpdate)
+        } else {
+            return (added: values.count, lastUpdate: await lastUpdate())
+        }
     }
 
     /**
