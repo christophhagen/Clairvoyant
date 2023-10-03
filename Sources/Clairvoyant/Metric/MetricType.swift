@@ -9,6 +9,7 @@ public enum MetricType: RawRepresentable {
     case customType(named: String)
     case serverStatus
     case httpStatus
+    case semanticVersion
 
     public var rawValue: String {
         switch self {
@@ -28,6 +29,8 @@ public enum MetricType: RawRepresentable {
             return "Status"
         case .httpStatus:
             return "HTTP Status"
+        case .semanticVersion:
+            return "SemanticVersion"
         }
     }
 
@@ -64,6 +67,8 @@ public enum MetricType: RawRepresentable {
             return ServerStatus.self
         case .httpStatus:
             return HTTPStatusCode.self
+        case .semanticVersion:
+            return SemanticVersion.self
         }
     }
 }
