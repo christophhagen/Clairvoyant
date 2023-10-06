@@ -43,6 +43,7 @@ public enum MetricType: RawRepresentable {
         case "Data": self = .data
         case "Status": self = .serverStatus
         case "HTTP Status": self = .httpStatus
+        case "SemanticVersion": self = .semanticVersion
         default:
             self = .customType(named: rawValue)
         }
