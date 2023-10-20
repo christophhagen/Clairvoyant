@@ -24,3 +24,8 @@ extension Data: MetricValue {
 
     public static let valueType: MetricType = .data
 }
+
+extension Date: MetricValue {
+    
+    public static let valueType: MetricType = .date
+}
