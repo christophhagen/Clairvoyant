@@ -242,4 +242,29 @@ public final class MetricObserver {
         }
         return result
     }
+    
+    /**
+     Save the info of all currently registered metrics to disk, in a human-readable format.
+     
+     This can make it easier to determine which log files are available and which belong to which metrics.
+     - Returns: `true`, if the file was written.
+     */
+    @discardableResult
+    public func saveCurrentListOfMetricsToLogFolder() -> Bool {
+        let list = observedMetrics.values
+            .map { $0.info }
+            .sorted { $0.id }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        let url = logFolder.appendingPathComponent("metrics.json")
+        do {
+            let data = try encoder.encode(list)
+            try data.write(to: url)
+            return true
+        } catch {
+            print("Failed to save metric list: \(error)")
+            return false
+        }
+    }
 }
