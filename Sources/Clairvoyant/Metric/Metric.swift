@@ -57,6 +57,11 @@ public actor Metric<T> where T: MetricValue {
     public nonisolated var name: String? {
         info.name
     }
+    
+    /// The number of bytes used for the metric history on disk
+    public var sizeOnDisk: Int {
+        fileWriter.usedDiskSpace
+    }
 
     /**
      The maximum size of the log files (in bytes).

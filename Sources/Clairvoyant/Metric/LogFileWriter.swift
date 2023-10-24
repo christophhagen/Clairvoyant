@@ -551,4 +551,10 @@ final class LogFileWriter<T> where T: MetricValue {
             throw error
         }
     }
+    
+    // MARK: Size
+    
+    var usedDiskSpace: Int {
+        folder.fileSize
+    }
 }
