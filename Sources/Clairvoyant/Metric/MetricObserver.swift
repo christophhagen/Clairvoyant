@@ -251,8 +251,8 @@ public final class MetricObserver {
      */
     @discardableResult
     public func saveCurrentListOfMetricsToLogFolder() -> Bool {
-        let list = observedMetrics.values
-            .map { $0.info }
+        let list = observedMetrics
+            .map { MetricStorageInfo(info: $0.value.info, hash: $0.key) }
             .sorted { $0.id }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -266,5 +266,12 @@ public final class MetricObserver {
             print("Failed to save metric list: \(error)")
             return false
         }
+    }
+    
+    /**
+     Calculate the size of the local storage dedicated to the metric.
+     */
+    public var localStorageSize: Int {
+        logFolder.fileSize
     }
 }
