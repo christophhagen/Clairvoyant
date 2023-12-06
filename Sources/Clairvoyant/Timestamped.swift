@@ -38,6 +38,9 @@ extension Timestamped: Decodable where Value: Decodable {
 
 extension Timestamped: Equatable where Value: Equatable {
     
+    public static func == (lhs: Timestamped, rhs: Timestamped) -> Bool {
+        lhs.value == rhs.value && lhs.timestamp.timeIntervalSince1970 == rhs.timestamp.timeIntervalSince1970
+    }
 }
 
 extension Timestamped: CustomStringConvertible where Value: CustomStringConvertible {
