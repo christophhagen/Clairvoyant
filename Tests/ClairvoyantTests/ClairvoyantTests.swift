@@ -232,6 +232,29 @@ final class ClairvoyantTests: XCTestCase {
         let last = await metric.lastValue()
         XCTAssertEqual(last?.value, 2)
     }
+    
+    func testReverseHistoryBatch() async throws {
+        let observer = createObserver()
+        let metric: Metric<Int> = observer.addMetric(id: "myInt")
+        let now = Date.now
+        let values = (1...100).reversed().map { Timestamped(value: $0, timestamp: now.advanced(by: TimeInterval(-$0))) }
+        try await metric.update(values)
+        
+        let newestBatch = await metric.history(from: now, to: .distantPast, limit: 100)
+        XCTAssertEqual(newestBatch, values.suffix(100).reversed())
+    }
+    
+    func testEncodedReverseHistoryBatch() async throws {
+        let observer = createObserver()
+        let metric: Metric<Int> = observer.addMetric(id: "myInt")
+        let now = Date.now
+        let values = (1...100).reversed().map { Timestamped(value: $0, timestamp: now.advanced(by: TimeInterval(-$0))) }
+        try await metric.update(values)
+        
+        let newestBatchData = await metric.encodedHistoryData(from: now, to: .distantPast, maximumValueCount: 100)
+        let newestBatch: [Timestamped<Int>] = try JSONDecoder().decode(from: newestBatchData)
+        XCTAssertEqual(newestBatch, values.suffix(100).reversed())
+    }
 
 }
 
@@ -251,5 +274,12 @@ private extension Date {
 
     static func at(_ time: TimeInterval) -> Date {
         .init(timeIntervalSince1970: time)
+    }
+}
+
+extension Timestamped: Equatable where Value: Equatable {
+    
+    public static func == (lhs: Timestamped, rhs: Timestamped) -> Bool {
+        lhs.value == rhs.value && lhs.timestamp == rhs.timestamp
     }
 }

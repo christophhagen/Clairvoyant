@@ -346,7 +346,7 @@ final class LogFileWriter<T> where T: MetricValue {
         if start <= end {
             return await getHistory(in: start...end, count: count)
         } else {
-            return await getHistory(in: start...end, count: count)
+            return await getHistoryReversed(in: end...start, count: count)
         }
     }
     
