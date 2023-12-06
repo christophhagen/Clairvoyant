@@ -276,10 +276,3 @@ private extension Date {
         .init(timeIntervalSince1970: time)
     }
 }
-
-extension Timestamped: Equatable where Value: Equatable {
-    
-    public static func == (lhs: Timestamped, rhs: Timestamped) -> Bool {
-        lhs.value == rhs.value && lhs.timestamp == rhs.timestamp
-    }
-}

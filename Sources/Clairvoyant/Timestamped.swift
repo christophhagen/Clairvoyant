@@ -36,6 +36,17 @@ extension Timestamped: Decodable where Value: Decodable {
     }
 }
 
+extension Timestamped: Equatable where Value: Equatable {
+    
+}
+
+extension Timestamped: CustomStringConvertible where Value: CustomStringConvertible {
+    
+    public var description: String {
+        "[\(timestamp)] \(value.description)"
+    }
+}
+
 /**
  An internal struct to partially decode abstract timestamped values
  */
