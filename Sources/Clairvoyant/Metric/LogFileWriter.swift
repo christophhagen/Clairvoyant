@@ -338,8 +338,20 @@ final class LogFileWriter<T> where T: MetricValue {
     
     // MARK: History
     
-    func getHistory(in range: ClosedRange<Date>, maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
-        var remainingValuesToRead = maximumValueCount ?? .max
+    func getHistory(from start: Date, to end: Date, maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
+        let count = maximumValueCount ?? .max
+        guard count > 0 else {
+            return []
+        }
+        if start <= end {
+            return await getHistory(in: start...end, count: count)
+        } else {
+            return await getHistory(in: start...end, count: count)
+        }
+    }
+    
+    private func getHistory(in range: ClosedRange<Date>, count: Int) async -> [Timestamped<T>] {
+        var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
         let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
         for file in files {
@@ -354,55 +366,15 @@ final class LogFileWriter<T> where T: MetricValue {
         }
         return result
     }
-
-    func getFullHistory(maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
-        await getAllLogFiles().asyncMap { await self.decodeTimestampedStream(from: $0) }.joined().map { $0 }
-    }
     
-    func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) async -> Data {
-        let result = await getHistoryData(startingFrom: start, upTo: end, maximumValueCount: maximumValueCount)
-            .map { $0.data }
-            .joined()
-        return Data(result)
-    }
-    
-    private func getHistoryData(startingFrom start: Date, upTo end: Date, maximumValueCount: Int? = nil) async -> [TimestampedEncodedData] {
-        let count = maximumValueCount ?? .max
-        guard count > 0 else {
-            return []
-        }
-        if start > end {
-            return await getHistoryDataReversed(in: end...start, count: count)
-        }
-        return await getHistoryData(in: start...end, count: count)
-    }
-    
-    private func getHistoryData(in range: ClosedRange<Date>, count: Int) async -> [TimestampedEncodedData] {
+    private func getHistoryReversed(in range: ClosedRange<Date>, count: Int) async -> [Timestamped<T>] {
         var remainingValuesToRead = count
-        var result: [TimestampedEncodedData] = []
-        let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
-        for file in files {
-            // Opportunistically get history data, ignore file errors
-            let elements = await getReadableElements(from: file.url)
-                .filter { range.contains($0.date) }
-                .prefix(remainingValuesToRead)
-            result.append(contentsOf: elements)
-            remainingValuesToRead -= elements.count
-            if remainingValuesToRead <= 0 {
-                return result
-            }
-        }
-        return result
-    }
-    
-    private func getHistoryDataReversed(in range: ClosedRange<Date>, count: Int) async -> [TimestampedEncodedData] {
-        var remainingValuesToRead = count
-        var result: [TimestampedEncodedData] = []
+        var result: [Timestamped<T>] = []
         let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }.reversed()
         for file in files {
             // Opportunistically get history data, ignore file errors
-            let elements = await getReadableElements(from: file.url)
-                .filter { range.contains($0.date) }
+            let elements = await decodeTimestampedStream(from: file.url)
+                .filter { range.contains($0.timestamp) }
                 .suffix(remainingValuesToRead)
                 .reversed()
             result.append(contentsOf: elements)
@@ -413,7 +385,11 @@ final class LogFileWriter<T> where T: MetricValue {
         }
         return result
     }
-    
+
+    func getFullHistory(maximumValueCount: Int? = nil) async -> [Timestamped<T>] {
+        await getAllLogFiles().asyncMap { await self.decodeTimestampedStream(from: $0) }.joined().map { $0 }
+    }
+
     private func decodeTimestampedStream(from url: URL) async -> [Timestamped<T>] {
         guard exists(url) else {
             await logError("File \(url.lastPathComponent): Not found")
@@ -437,10 +413,6 @@ final class LogFileWriter<T> where T: MetricValue {
             await logError("File \(url.lastPathComponent): Failed to decode: \(error)")
             return []
         }
-    }
-
-    private func getReadableElements(from url: URL) async -> [TimestampedEncodedData] {
-        (try? await getElements(from: url)) ?? []
     }
     
     private func getElements(from url: URL) async throws -> [TimestampedEncodedData] {

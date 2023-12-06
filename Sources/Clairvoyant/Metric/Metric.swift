@@ -229,8 +229,19 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged within the given date range.
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func history(in range: ClosedRange<Date>) async -> [Timestamped<T>] {
-        await fileWriter.getHistory(in: range)
+    public func history(in range: ClosedRange<Date>, limit: Int? = nil) async -> [Timestamped<T>] {
+        await history(from: range.lowerBound, to: range.upperBound, limit: limit)
+    }
+    
+    /**
+     Get the history of the metric values within a time period.
+     - Parameter start: The start date
+     - Parameter end: The end date of the range
+     - Returns: The values logged within the given date range.
+     - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
+     */
+    public func history(from start: Date, to end: Date, limit: Int? = nil) async -> [Timestamped<T>] {
+        await fileWriter.getHistory(from: start, to: end, maximumValueCount: limit)
     }
 
     /**
@@ -238,7 +249,7 @@ public actor Metric<T> where T: MetricValue {
      - Returns: The values logged for the metric
      - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
      */
-    public func fullHistory() async -> [Timestamped<T>] {
+    public func history() async -> [Timestamped<T>] {
         await fileWriter.getFullHistory()
     }
 
@@ -368,8 +379,7 @@ extension Metric: GenericMetric {
      - Returns: The encoded data points, i.e. [Timestamped<T>]
      */
     public func encodedHistoryData(from startDate: Date, to endDate: Date, maximumValueCount: Int? = nil) async -> Data {
-        let range = startDate < endDate ? startDate...endDate : endDate...startDate
-        let values: [Timestamped<T>] = await fileWriter.getHistory(in: range, maximumValueCount: maximumValueCount)
+        let values: [Timestamped<T>] = await fileWriter.getHistory(from: startDate, to: endDate, maximumValueCount: maximumValueCount)
         return (try? await fileWriter.encode(values)) ?? Data()
     }
 }
