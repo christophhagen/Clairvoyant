@@ -18,7 +18,7 @@ struct MetricStorageInfo {
      Indicates that the metric writes values to disk locally.
 
      If this property is `false`, then no data will be kept apart from the last value of the metric.
-     This means that calling `getHistory()` on the metric always returns an empty response.
+     This means that calling `history()` on the metric always returns an empty response.
      */
     let keepsLocalHistoryData: Bool
 

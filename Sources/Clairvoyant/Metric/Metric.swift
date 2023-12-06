@@ -243,6 +243,16 @@ public actor Metric<T> where T: MetricValue {
     public func history(from start: Date, to end: Date, limit: Int? = nil) async -> [Timestamped<T>] {
         await fileWriter.getHistory(from: start, to: end, maximumValueCount: limit)
     }
+    
+    /**
+     Get the entire history of the metric values.
+     - Returns: The values logged for the metric
+     - Throws: `MetricError.failedToOpenLogFile`, if the log file on disk could not be opened. `MetricError.logFileCorrupted` if data in the log file could not be decoded.
+     */
+    @available(*, deprecated, renamed: "history", message: "Renamed to history()")
+    public func fullHistory() async -> [Timestamped<T>] {
+        await history()
+    }
 
     /**
      Get the entire history of the metric values.
