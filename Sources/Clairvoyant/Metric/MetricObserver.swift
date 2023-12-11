@@ -271,6 +271,25 @@ public final class MetricObserver {
         }
     }
     
+    private var metricListUrl: URL {
+        logFolder.appendingPathComponent(MetricObserver.metricListFileName)
+    }
+    
+    /**
+     Read the list of logged metrics from disk.
+     
+     This function reads the list of metrics previously saved by ``saveCurrentListOfMetricsToLogFolder()``.
+     If no list exists, then this function returns nil.
+     */
+    public func readListOfMetricsFromLogFolder() throws -> [MetricInfo]? {
+        let url = metricListUrl
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(from: data)
+    }
+    
     /**
      Calculate the size of the local storage dedicated to the metric.
      */
