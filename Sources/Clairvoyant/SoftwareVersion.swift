@@ -11,10 +11,16 @@ public struct SemanticVersion {
     /// The patch version of the software
     public let patch: Int?
 
-    public init(major: Int, minor: Int? = nil, patch: Int? = nil) {
+    public init(major: Int, minor: Int, patch: Int? = nil) {
         self.major = major
         self.minor = minor
         self.patch = patch
+    }
+    
+    public init(major: Int, minor: Int? = nil) {
+        self.major = major
+        self.minor = minor
+        self.patch = nil
     }
 }
 
@@ -105,4 +111,11 @@ extension SemanticVersion: Comparable {
 extension SemanticVersion: MetricValue {
     
     public static let valueType: MetricType = .semanticVersion
+}
+
+extension SemanticVersion: CustomStringConvertible {
+    
+    public var description: String {
+        rawValue
+    }
 }
