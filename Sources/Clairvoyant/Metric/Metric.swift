@@ -194,7 +194,7 @@ public actor Metric<T> where T: MetricValue {
      - Note: This initializer crashes with a `fatalError`, if `info.dataType` does not match `T.valueType`
      - Note: This initializer crashes with a `fatalError`, if a metric with the same `id` is already registered with the observer.
      */
-    public init(_ info: MetricInfo, fileSize: Int = 10_000_000) async {
+    public init(_ info: MetricInfo, fileSize: Int = 10_000_000) {
         guard info.dataType == T.valueType else {
             fatalError("Creating metric of type `\(T.self)` with mismatching data type '\(info.dataType)'")
         }
