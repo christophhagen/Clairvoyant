@@ -51,33 +51,14 @@ extension Timestamped: CustomStringConvertible where Value: CustomStringConverti
 }
 
 /**
- An internal struct to partially decode abstract timestamped values
+ A struct to partially decode abstract timestamped values, when the contained value is unknown.
  */
-struct AnyTimestamped: Decodable {
+public struct UnknownTimestamped: Decodable {
 
-    let timestamp: Date
+    public let timestamp: Date
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         self.timestamp = try container.decode(Date.self)
     }
 }
-
-public protocol Timestampable {
-
-}
-
-extension Timestampable {
-
-    public func timestamped() -> Timestamped<Self> {
-        .init(value: self)
-    }
-}
-
-public protocol AsTimestamped {
-
-    associatedtype Value
-}
-
-
-extension Timestamped: AsTimestamped { }

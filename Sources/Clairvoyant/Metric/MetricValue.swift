@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol MetricValue: Codable, Equatable {
+public protocol MetricValue: Timestampable, Codable, Equatable {
 
     /**
      The metric type.

@@ -31,7 +31,7 @@ final class EncodingTests: XCTestCase {
         let value = Timestamped(value: 123)
         let encoded = try JSONEncoder().encode(value)
         
-        let decoded: AnyTimestamped = try JSONDecoder().decode(from: encoded)
+        let decoded: UnknownTimestamped = try JSONDecoder().decode(from: encoded)
         XCTAssertEqual(value.timestamp, decoded.timestamp)
     }
 }
