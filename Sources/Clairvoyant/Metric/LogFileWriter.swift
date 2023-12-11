@@ -41,7 +41,7 @@ final class LogFileWriter<T> where T: MetricValue {
         self.metricId = id
         self.metricIdHash = hash
         self.folder = metricFolder
-        self.lastValueUrl = metricFolder.appendingPathComponent("last")
+        self.lastValueUrl = metricFolder.appendingPathComponent(MetricObserver.lastValueFileName)
         self.encoder = encoder
         self.decoder = decoder
         self.maximumFileSizeInBytes = fileSize

@@ -4,6 +4,10 @@ import FoundationNetworking
 #endif
 
 public final class MetricObserver {
+    
+    static let metricListFileName = "metrics.json"
+    
+    static let lastValueFileName = "last"
 
     /**
      The default observer, to which created metrics are added.
@@ -257,10 +261,9 @@ public final class MetricObserver {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         
-        let url = logFolder.appendingPathComponent("metrics.json")
         do {
             let data = try encoder.encode(list)
-            try data.write(to: url)
+            try data.write(to: metricListUrl)
             return true
         } catch {
             print("Failed to save metric list: \(error)")
