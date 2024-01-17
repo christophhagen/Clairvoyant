@@ -21,3 +21,15 @@ extension MetricValue {
         Self.valueType
     }
 }
+
+public protocol CustomMetricValue: MetricValue {
+    
+    static var customTypeName: String { get }
+}
+
+extension CustomMetricValue {
+    
+    public static var valueType: MetricType {
+        .customType(named: customTypeName)
+    }
+}
