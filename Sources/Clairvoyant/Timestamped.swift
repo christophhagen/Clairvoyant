@@ -12,10 +12,10 @@ public struct Timestamped<Value> {
         self.timestamp = timestamp
         self.value = value
     }
+}
 
-    public func mapValue<T>(_ closure: (Value) -> T) -> Timestamped<T> {
-        .init(value: closure(value), timestamp: timestamp)
-    }
+extension Timestamped: TimestampedProtocol {
+    
 }
 
 extension Timestamped: Encodable where Value: Encodable {
