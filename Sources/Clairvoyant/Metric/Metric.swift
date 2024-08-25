@@ -48,7 +48,7 @@ public actor Metric<T> where T: MetricValue {
         info.keepsLocalHistoryData
     }
 
-    /// The unique if of the metric
+    /// The unique id of the metric
     public nonisolated var id: MetricId {
         info.id
     }

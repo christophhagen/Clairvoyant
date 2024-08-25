@@ -5,7 +5,7 @@ import Foundation
  */
 public struct MetricInfo {
 
-    /// The unique if of the metric
+    /// The unique id of the metric
     public let id: String
 
     /// The data type of the values in the metric
