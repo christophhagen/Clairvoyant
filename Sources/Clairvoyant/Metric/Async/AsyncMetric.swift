@@ -113,13 +113,13 @@ public struct AsyncMetric<Value> where Value: MetricValue {
         guard let lastValueTime = try await currentValue()?.timestamp else {
             let valuesToAdd = values
                 .sorted { $0.timestamp }
-            try await storage.update(valuesToAdd, for: self)
+            try await storage.store(valuesToAdd, for: self)
             return
         }
         let valuesToAdd = values
             .filter { $0.timestamp <= lastValueTime }
             .sorted { $0.timestamp }
-        try await storage.update(valuesToAdd, for: self)
+        try await storage.store(valuesToAdd, for: self)
     }
     
     /**

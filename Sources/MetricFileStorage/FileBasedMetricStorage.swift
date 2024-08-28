@@ -248,7 +248,7 @@ extension FileBasedMetricStorage: AsyncMetricStorage {
         changeListeners[id]?.forEach { $0(value) }
     }
     
-    public func update<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
+    public func store<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         let id = metric.id
         var last: Timestamped<T>? = nil
         for value in values {
@@ -286,7 +286,7 @@ extension FileBasedMetricStorage: AsyncMetricStorage {
         lastValues[metric.id] = nil
     }
     
-    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) async throws where T : MetricValue {
+    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) throws where T : MetricValue {
         let id = metric.id
         let existingListeners = changeListeners[id] ?? []
         let newListener = { (value: Any) in

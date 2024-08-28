@@ -8,7 +8,7 @@ public protocol AsyncMetricStorage: AnyObject {
     
     func store<T>(_ value: Timestamped<T>, for metric: AsyncMetric<T>) async throws
     
-    func update<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S: Sequence, S.Element == Timestamped<T>
+    func store<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S: Sequence, S.Element == Timestamped<T>
     
     func lastValue<T>(for metric: AsyncMetric<T>) async throws -> Timestamped<T>?
     
