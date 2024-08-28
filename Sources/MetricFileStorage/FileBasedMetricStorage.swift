@@ -251,14 +251,16 @@ extension FileBasedMetricStorage: AsyncMetricStorage {
     public func store<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         let id = metric.id
         var last: Timestamped<T>? = nil
+        let writer = try writer(for: metric)
         for value in values {
             // Get writer and save value
-            try await writer(for: metric).write(value)
+            try await writer.writeOnlyToLog(value)
             last = value
         }
         guard let last else {
             return
         }
+        try await writer.write(lastValue: last)
         // Update last value cache
         lastValues[id] = last
         // Notify all listeners
