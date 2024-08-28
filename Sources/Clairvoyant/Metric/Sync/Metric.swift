@@ -116,13 +116,13 @@ public struct Metric<Value> where Value: MetricValue {
         guard let lastValueTime = try currentValue()?.timestamp else {
             let valuesToAdd = values
                 .sorted { $0.timestamp }
-            try storage.update(valuesToAdd, for: self)
+            try storage.store(valuesToAdd, for: self)
             return
         }
         let valuesToAdd = values
             .filter { $0.timestamp <= lastValueTime }
             .sorted { $0.timestamp }
-        try storage.update(valuesToAdd, for: self)
+        try storage.store(valuesToAdd, for: self)
     }
     
     /**

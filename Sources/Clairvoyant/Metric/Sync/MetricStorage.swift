@@ -14,7 +14,7 @@ public protocol MetricStorage: AnyObject {
     
     func store<T>(_ value: Timestamped<T>, for metric: Metric<T>) throws
     
-    func update<S, T>(_ values: S, for metric: Metric<T>) throws where S: Sequence, S.Element == Timestamped<T>
+    func store<S, T>(_ values: S, for metric: Metric<T>) throws where S: Sequence, S.Element == Timestamped<T>
     
     func lastValue<T>(for metric: Metric<T>) throws -> Timestamped<T>?
     
