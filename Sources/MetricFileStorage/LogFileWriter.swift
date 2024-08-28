@@ -1,8 +1,10 @@
 import Foundation
+import Clairvoyant
 
+private typealias TimestampedValueData = Data
 private typealias TimestampedEncodedData = (date: Date, data: Data)
 
-final class LogFileWriter<T> where T: MetricValue {
+actor LogFileWriter<T> where T: MetricValue {
     
     var maximumFileSizeInBytes: Int
 
@@ -14,14 +16,12 @@ final class LogFileWriter<T> where T: MetricValue {
     private let headerByteCount = 2 + Double.encodedLength
     
     let metricId: MetricId
-    
-    let metricIdHash: MetricIdHash
 
     var logClosure: (String) async -> Void
     
-    private let encoder: BinaryEncoder
+    private let encoder: AnyBinaryEncoder
     
-    private let decoder: BinaryDecoder
+    private let decoder: AnyBinaryDecoder
     
     private let folder: URL
     
@@ -36,12 +36,13 @@ final class LogFileWriter<T> where T: MetricValue {
     /// The internal file manager used to access files
     let fileManager: FileManager = .default
     
-    init(id: MetricId, hash: MetricIdHash, folder: URL, encoder: BinaryEncoder, decoder: BinaryDecoder, fileSize: Int, logClosure: @escaping (String) async -> Void) {
-        let metricFolder = folder.appendingPathComponent(hash)
+    init(id: MetricId, folder: URL, encoder: AnyBinaryEncoder, decoder: AnyBinaryDecoder, fileSize: Int, logClosure: @escaping (String) async -> Void) {
+        let metricFolder = folder
+            .appendingPathComponent(id.group)
+            .appendingPathComponent(id.id)
         self.metricId = id
-        self.metricIdHash = hash
         self.folder = metricFolder
-        self.lastValueUrl = metricFolder.appendingPathComponent(MetricObserver.lastValueFileName)
+        self.lastValueUrl = metricFolder.appendingPathComponent(FileBasedMetricStorage.lastValueFileName)
         self.encoder = encoder
         self.decoder = decoder
         self.maximumFileSizeInBytes = fileSize
@@ -85,7 +86,7 @@ final class LogFileWriter<T> where T: MetricValue {
     }
     
     private func url(for date: Date) -> URL {
-        folder.appendingPathComponent("\(Int(date.timeIntervalSince1970))")
+        folder.appendingPathComponent("\(Int(date.timeIntervalSince1970 * 1000))")
     }
     
     /**
@@ -139,9 +140,9 @@ final class LogFileWriter<T> where T: MetricValue {
                     guard let dateString = Int($0.lastPathComponent) else {
                         return nil
                     }
-                    return ($0, Date(timeIntervalSince1970: TimeInterval(dateString)))
+                    return (url: $0, date: Date(timeIntervalSince1970: TimeInterval(dateString) / 1000))
                 }
-                .sorted { $0.date < $1.date }
+                .sorted { $0.date }
         } catch {
             await logError("Failed to get list of files: \(error)")
             return []
@@ -155,7 +156,7 @@ final class LogFileWriter<T> where T: MetricValue {
         let all = await getAllLogFilesWithStartDates()
         return all.indices.map { i in
             let (url, start) = all[i]
-            let end = (i + 1 < all.count) ? all[i+1].date : Date()
+            let end = (i + 1 < all.count) ? all[i+1].date : .distantFuture
             return (url, start...end)
         }
     }
@@ -308,7 +309,7 @@ final class LogFileWriter<T> where T: MetricValue {
     
     // MARK: Reading
     
-    func lastValueData() async -> TimestampedValueData? {
+    private func lastValueData() async -> TimestampedValueData? {
         guard exists(lastValueUrl) else {
             // TODO: Read last value from history file?
             return nil
@@ -353,7 +354,8 @@ final class LogFileWriter<T> where T: MetricValue {
     private func getHistory(in range: ClosedRange<Date>, count: Int) async -> [Timestamped<T>] {
         var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
-        let files = await getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }
+        let files = await getAllLogFilesWithIntervals()
+            .filter { $0.range.overlaps(range) }
         for file in files {
             let elements = await decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
@@ -474,36 +476,40 @@ final class LogFileWriter<T> where T: MetricValue {
             throw MetricError.failedToDeleteLogFile
         }
     }
-
-    func deleteHistory(before date: Date) async throws {
+    
+    func deleteHistory(from start: Date, to end: Date) async throws {
         // Prevent messing with open file
         await closeFile()
 
         // Only select files containing items before the date
-        let files = await getAllLogFilesWithIntervals().prefix { $0.range.upperBound < date }
+        let files = await getAllLogFilesWithIntervals()
+            
         for (url, range) in files {
-            if date < range.lowerBound {
-                // File contains only older entries
+            guard range.lowerBound <= end && range.upperBound >= start else {
+                continue
+            }
+            if range.lowerBound >= start && range.upperBound <= end {
+                // File completely contained in interval to delete
                 try await deleteFile(at: url)
                 // If an error is thrown here, then only the oldest history will be deleted,
                 // so at least no inconsistency
             } else {
                 // Delete some entries within file
-                try await deleteElementsInFile(at: url, before: date)
+                try await deleteElementsInFile(at: url, from: start, to: end)
             }
         }
     }
 
-    private func deleteElementsInFile(at url: URL, before date: Date) async throws {
+    private func deleteElementsInFile(at url: URL, from start: Date, to end: Date) async throws {
         let remainingElements = try await getElements(from: url)
-            .drop { $0.date < date }
+            .filter { $0.date < start || $0.date > end }
         guard let start = remainingElements.first?.date else {
             // No elements to keep, delete old file
+            print("Nothing to keep")
             try await deleteFile(at: url)
             return
         }
-        let data = Data(remainingElements.map { $0.data }
-            .joined())
+        let data = Data(remainingElements.map { $0.data }.joined())
 
         // Create new file with different date
         let newFileUrl = self.url(for: start)
@@ -512,6 +518,11 @@ final class LogFileWriter<T> where T: MetricValue {
         } catch {
             await logError("File \(newFileUrl.lastPathComponent): Failed to create updated history file: \(error)")
             throw MetricError.failedToOpenLogFile
+        }
+        
+        if newFileUrl.lastPathComponent == url.lastPathComponent {
+            // Writing to same file due to same timestamp
+            return
         }
 
         // Delete old file

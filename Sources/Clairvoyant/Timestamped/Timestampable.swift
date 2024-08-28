@@ -14,7 +14,7 @@ extension Timestampable {
      - Parameter timestamp: The timestamp to add to the value, default to the current time.
      - Returns: The timestamped value
      */
-    public func timestamped(with timestamp: Date = .now) -> Timestamped<Self> {
+    public func timestamped(with timestamp: Date = Date()) -> Timestamped<Self> {
         .init(value: self, timestamp: timestamp)
     }
 }

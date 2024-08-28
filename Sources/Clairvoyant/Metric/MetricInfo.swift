@@ -1,100 +1,80 @@
 import Foundation
 
-public struct MetricOptions: OptionSet, Codable {
-    
-    public let rawValue: UInt8
-    
-    public init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
-    
-    public static let keepHistoryData = MetricOptions(rawValue: 1 << 0)
-    
-    public static let mirrorsRemoteMetric = MetricOptions(rawValue: 1 << 1)
-    
-    public static let allowsRemoteUpdates = MetricOptions(rawValue: 1 << 2)
-}
-
 /**
  A description of a metric published by a server.
  */
 public struct MetricInfo {
 
-    /// The unique id of the metric
-    public let id: String
-
-    /// The data type of the values in the metric
-    public let dataType: MetricType
-
-    public let options: MetricOptions
+    /// The unique id of the metric in the group
+    public let id: MetricId
     
-    /**
-     Indicates that the metric writes values to disk locally.
-
-     If this property is `false`, then no data will be kept apart from the last value of the metric.
-     This means that calling `getHistory()` on the metric always returns an empty response.
-     */
-    public var keepsLocalHistoryData: Bool {
-        options.contains(.keepHistoryData)
-    }
-    
-    public var mirrorsRemoteMetric: Bool {
-        options.contains(.mirrorsRemoteMetric)
-    }
-    
-    public var allowsRemoteUpdates: Bool {
-        options.contains(.allowsRemoteUpdates)
-    }
-
-    /// A name to display for the metric
+    /// The  name of the metric
     public let name: String?
-
+    
     /// A description of the metric content
     public let description: String?
 
+    /// An identifier to describe the type of values encoded in a metric
+    public let valueType: MetricType
+
     /**
      Create a new metric info.
-     - Parameter id: The unique if of the metric
-     - Parameter dataType: The data type of the values in the metric
-     - Parameter name: A descriptive name of the metric
-     - Parameter description: A textual description of the metric
-     - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
+     - Parameter id: The unique id of the metric in the group
+     - Parameter group: The group to which this metric belongs
+     - Parameter name: The name of the metric
+     - Parameter description: A description of the metric content
+     - Parameter valueType: An identifier to describe the type of values encoded in a metric
      */
-    public init(id: String, dataType: MetricType, keepsLocalHistoryData: Bool, name: String? = nil, description: String? = nil) {
-        self.id = id
-        self.dataType = dataType
-        self.options = .keepHistoryData
+    public init(id: String, group: String, valueType: MetricType, name: String? = nil, description: String? = nil) {
+        self.id = .init(id: id, group: group)
+        self.valueType = valueType
         self.name = name
         self.description = description
     }
     
     /**
      Create a new metric info.
-     - Parameter id: The unique if of the metric
-     - Parameter dataType: The data type of the values in the metric
-     - Parameter name: A descriptive name of the metric
-     - Parameter description: A textual description of the metric
-     - Parameter keepsLocalHistoryData: Indicate if the metric should persist the history to disk
+     - Parameter id: The unique id of the metric
+     - Parameter name: The name of the metric
+     - Parameter description: A description of the metric content
+     - Parameter valueType: An identifier to describe the type of values encoded in a metric
      */
-    public init(id: String, dataType: MetricType, options: MetricOptions = [], name: String? = nil, description: String? = nil) {
+    public init(id: MetricId, valueType: MetricType, name: String? = nil, description: String? = nil) {
         self.id = id
-        self.dataType = dataType
-        self.options = options
+        self.valueType = valueType
         self.name = name
         self.description = description
     }
 }
 
 extension MetricInfo: Codable {
+    
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = .init(
+            id: try container.decode(String.self, forKey: .id),
+            group: try container.decode(String.self, forKey: .group))
+        self.valueType = try container.decode(MetricType.self, forKey: .valueType)
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.description = try container.decodeIfPresent(String.self, forKey: .description)
+    }
+    
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id.id, forKey: .id)
+        try container.encode(id.group, forKey: .group)
+        try container.encode(valueType, forKey: .valueType)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(description, forKey: .description)
+    }
 
     enum CodingKeys: Int, CodingKey {
         case id = 1
-        case dataType = 2
+        case group = 2
         case name = 3
         case description = 4
-        case options = 6
+        case valueType = 5
     }
-
 }
 
 extension MetricInfo: Equatable {

@@ -1,21 +1,41 @@
 import Foundation
-import Crypto
 
-public typealias MetricId = String
-public typealias MetricIdHash = String
-
-extension MetricIdHash {
+public struct MetricId {
     
-    static let binaryLength = 16
+    public let id: String
     
-    /// The length of a valid `MetricIdHash`
-    public static let hashLength = binaryLength * 2
-
+    public let group: String
+    
+    public init(id: String, group: String) {
+        self.id = id
+        self.group = group
+    }
 }
 
-extension MetricId {
+extension MetricId: Equatable {
     
-    public func hashed() -> MetricIdHash {
-        SHA256.hash(data: data(using: .utf8)!).prefix(MetricIdHash.binaryLength).hex
+}
+
+extension MetricId: Hashable {
+    
+}
+
+extension MetricId: Codable {
+    
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.group = try container.decode(String.self, forKey: .group)
+    }
+    
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(group, forKey: .group)
+    }
+    
+    enum CodingKeys: Int, CodingKey {
+        case id = 1
+        case group = 2
     }
 }

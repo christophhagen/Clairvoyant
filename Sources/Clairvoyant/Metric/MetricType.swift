@@ -17,9 +17,9 @@ public enum MetricType: RawRepresentable {
     /// A Swift `Data` type
     case data
     
-    /// A custom type specific to the application
-    case customType(named: String)
-    
+    /// A Swift `Date` type
+    case date
+
     /// A Swift `ServerStatus` type
     case serverStatus
     
@@ -29,9 +29,9 @@ public enum MetricType: RawRepresentable {
     /// A `SemanticVersion` type
     case semanticVersion
     
-    /// A Swift `Date` type
-    case date
-
+    /// A custom type specific to the application
+    case customType(named: String)
+    
     public var rawValue: String {
         switch self {
         case .integer:
@@ -44,16 +44,16 @@ public enum MetricType: RawRepresentable {
             return "String"
         case .data:
             return "Data"
-        case .customType(let name):
-            return name
+        case .date:
+            return "Date"
         case .serverStatus:
             return "Status"
         case .httpStatus:
             return "HTTP Status"
         case .semanticVersion:
             return "SemanticVersion"
-        case .date:
-            return "Date"
+        case .customType(let name):
+            return name
         }
     }
 
@@ -64,10 +64,10 @@ public enum MetricType: RawRepresentable {
         case "Bool": self = .boolean
         case "String": self = .string
         case "Data": self = .data
+        case "Date": self = .date
         case "Status": self = .serverStatus
         case "HTTP Status": self = .httpStatus
         case "SemanticVersion": self = .semanticVersion
-        case "Date": self = .date
         default:
             self = .customType(named: rawValue)
         }
@@ -86,16 +86,16 @@ public enum MetricType: RawRepresentable {
             return String.self
         case .data:
             return Data.self
-        case .customType:
-            return nil
+        case .date:
+            return Date.self
         case .serverStatus:
             return ServerStatus.self
         case .httpStatus:
             return HTTPStatusCode.self
         case .semanticVersion:
             return SemanticVersion.self
-        case .date:
-            return Date.self
+        case .customType:
+            return nil
         }
     }
 }
@@ -121,5 +121,12 @@ extension MetricType: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         self.init(rawValue: try container.decode(String.self))
+    }
+}
+
+extension MetricType: ExpressibleByStringLiteral {
+    
+    public init(stringLiteral value: StringLiteralType) {
+        self.init(rawValue: value)
     }
 }

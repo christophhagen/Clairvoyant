@@ -1,7 +1,5 @@
 import Foundation
 
-typealias TimestampedValueData = Data
-
 public struct Timestamped<Value> {
 
     public let timestamp: Date
@@ -15,6 +13,11 @@ public struct Timestamped<Value> {
 }
 
 extension Timestamped: TimestampedProtocol {
+    
+}
+
+
+extension Timestamped: AnyTimestamped {
     
 }
 
