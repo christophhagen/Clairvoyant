@@ -222,6 +222,10 @@ public actor FileBasedMetricStorage {
 
 extension FileBasedMetricStorage: AsyncMetricStorage {
     
+    public func metrics() async throws -> [MetricInfo] {
+        metrics
+    }
+    
     public func metric<T>(_ id: MetricId, name: String?, description: String?, type: T.Type = T.self) throws -> AsyncMetric<T> where T : MetricValue {
         try getOrCreateMetric(id, name: name, description: description)
     }
