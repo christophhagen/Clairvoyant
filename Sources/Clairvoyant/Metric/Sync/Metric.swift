@@ -99,7 +99,7 @@ public struct Metric<Value> where Value: MetricValue {
     @discardableResult
     public func update(_ value: Timestamped<Value>) throws -> Bool {
         if let lastValue = try currentValue() {
-            if lastValue.value == value.value || lastValue.timestamp >= value.timestamp {
+            guard value.isDifferentAndNewer(than: lastValue) else {
                 return false
             }
         }
@@ -110,18 +110,24 @@ public struct Metric<Value> where Value: MetricValue {
     /**
      Update the metric with a sequence of values.
      
-     The given sequence is sorted and added to the log. Elements older than the last value are skipped.
+     The given sequence is sorted and added to the log.
+     Elements older than the last value are skipped, as are values that are equal to the previous ones
      */
     public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<Value> {
-        guard let lastValueTime = try currentValue()?.timestamp else {
-            let valuesToAdd = values
-                .sorted { $0.timestamp }
-            try storage.store(valuesToAdd, for: self)
-            return
+        var lastValue = try currentValue()
+        var valuesToAdd: [Timestamped<Value>] = []
+        for value in values.sorted(using: { $0.timestamp }) {
+            guard let last = lastValue else {
+                valuesToAdd.append(value)
+                lastValue = value
+                continue
+            }
+            guard value.isDifferentAndNewer(than: last) else {
+                continue
+            }
+            valuesToAdd.append(value)
+            lastValue = value
         }
-        let valuesToAdd = values
-            .filter { $0.timestamp <= lastValueTime }
-            .sorted { $0.timestamp }
         try storage.store(valuesToAdd, for: self)
     }
     
