@@ -90,3 +90,11 @@ extension MetricInfo: Hashable {
         hasher.combine(id)
     }
 }
+
+extension MetricInfo: Comparable {
+    
+    public static func < (lhs: MetricInfo, rhs: MetricInfo) -> Bool {
+        return lhs.id < rhs.id
+    }
+}
+

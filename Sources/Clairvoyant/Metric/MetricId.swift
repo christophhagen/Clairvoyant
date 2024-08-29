@@ -39,3 +39,13 @@ extension MetricId: Codable {
         case group = 2
     }
 }
+
+extension MetricId: Comparable {
+    
+    public static func < (lhs: MetricId, rhs: MetricId) -> Bool {
+        guard lhs.group == rhs.group else {
+            return lhs.group < rhs.group
+        }
+        return lhs.id < rhs.id
+    }
+}
