@@ -78,10 +78,8 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      */
     @discardableResult
     public func update(_ value: Timestamped<Value>) throws -> Bool {
-        if let lastValue = try currentValue() {
-            guard value.isDifferentAndNewer(than: lastValue) else {
-                return false
-            }
+        guard value.shouldUpdate(currentValue: try currentValue()) else {
+            return false
         }
         try storage.store(value, for: self)
         return true
@@ -94,20 +92,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      Elements older than the last value are skipped, as are values that are equal to the previous ones
      */
     public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<Value> {
-        var lastValue = try currentValue()
-        var valuesToAdd: [Timestamped<Value>] = []
-        for value in values.sorted(using: { $0.timestamp }) {
-            guard let last = lastValue else {
-                valuesToAdd.append(value)
-                lastValue = value
-                continue
-            }
-            guard value.isDifferentAndNewer(than: last) else {
-                continue
-            }
-            valuesToAdd.append(value)
-            lastValue = value
-        }
+        let valuesToAdd = values.valuesToUpdate(currentValue: try currentValue())
         try storage.store(valuesToAdd, for: self)
     }
     

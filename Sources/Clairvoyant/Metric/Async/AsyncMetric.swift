@@ -75,10 +75,8 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      */
     @discardableResult
     public func update(_ value: Timestamped<Value>) async throws -> Bool {
-        if let lastValue = try await currentValue() {
-            if lastValue.value == value.value || lastValue.timestamp >= value.timestamp {
-                return false
-            }
+        guard value.shouldUpdate(currentValue: try await currentValue()) else {
+            return false
         }
         try await storage.store(value, for: self)
         return true
@@ -90,15 +88,7 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      The given sequence is sorted and added to the log. Elements older than the last value are skipped.
      */
     public func update<S>(_ values: S) async throws where S: Sequence, S.Element == Timestamped<Value> {
-        guard let lastValueTime = try await currentValue()?.timestamp else {
-            let valuesToAdd = values
-                .sorted { $0.timestamp }
-            try await storage.store(valuesToAdd, for: self)
-            return
-        }
-        let valuesToAdd = values
-            .filter { $0.timestamp <= lastValueTime }
-            .sorted { $0.timestamp }
+        let valuesToAdd = values.valuesToUpdate(currentValue: try await currentValue())
         try await storage.store(valuesToAdd, for: self)
     }
     
