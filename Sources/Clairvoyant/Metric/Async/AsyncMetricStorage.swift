@@ -25,11 +25,15 @@ extension AsyncMetricStorage {
         try await delete(metric: metric.id)
     }
     
-    public func metric<T>(_ id: MetricId, name: String? = nil, description: String? = nil) async throws -> AsyncMetric<T> {
-        try await metric(id, name: name, description: description, type: T.self)
+    public func delete(metric id: String, group: String) async throws {
+        try await delete(metric: .init(id: id, group: group))
     }
     
-    public func metric<T>(_ id: String, group: String, name: String? = nil, description: String? = nil) async throws -> AsyncMetric<T> {
-        try await metric(.init(id: id, group: group), name: name, description: description, type: T.self)
+    public func metric<T>(id: MetricId, name: String? = nil, description: String? = nil, type: T.Type = T.self) async throws -> AsyncMetric<T> {
+        try await metric(id, name: name, description: description, type: type)
+    }
+    
+    public func metric<T>(id: String, group: String, name: String? = nil, description: String? = nil, type: T.Type = T.self) async throws -> AsyncMetric<T> {
+        try await metric(.init(id: id, group: group), name: name, description: description, type: type)
     }
 }

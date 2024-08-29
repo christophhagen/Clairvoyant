@@ -30,4 +30,16 @@ extension MetricStorage {
     public func delete<T>(_ metric: Metric<T>) throws {
         try delete(metric: metric.id)
     }
+    
+    public func delete(metric id: String, group: String) throws {
+        try delete(metric: .init(id: id, group: group))
+    }
+    
+    public func metric<T>(id: MetricId, name: String? = nil, description: String? = nil, type: T.Type = T.self) throws -> Metric<T> {
+        try metric(id, name: name, description: description, type: type)
+    }
+    
+    public func metric<T>(id: String, group: String, name: String? = nil, description: String? = nil, type: T.Type = T.self) throws -> Metric<T> {
+        try metric(.init(id: id, group: group), name: name, description: description, type: type)
+    }
 }
