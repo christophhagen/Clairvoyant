@@ -9,10 +9,10 @@ public struct MetricInfo {
     public let id: MetricId
     
     /// The  name of the metric
-    public let name: String?
+    public var name: String?
     
     /// A description of the metric content
-    public let description: String?
+    public var description: String?
 
     /// An identifier to describe the type of values encoded in a metric
     public let valueType: MetricType
