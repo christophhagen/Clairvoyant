@@ -48,7 +48,7 @@ final class ClairvoyantTests: XCTestCase {
 
     func getIntMetricAndStorage(fileSize: Int = 10_000_000) async throws -> (metric: AsyncMetric<Int>, storage: FileBasedMetricStorage) {
         let storage = try await createStorage(fileSize: fileSize)
-        let metric: AsyncMetric<Int> = try await storage.metric("int", group: "test")
+        let metric: AsyncMetric<Int> = try await storage.metric(id: "int", group: "test")
         return (metric, storage)
     }
 
@@ -174,7 +174,7 @@ final class ClairvoyantTests: XCTestCase {
 
     func testDeleteHistory() async throws {
         let storage = try await createStorage()
-        let metric: AsyncMetric<Int> = try await storage.metric("myInt", group: "test")
+        let metric: AsyncMetric<Int> = try await storage.metric(id: "myInt", group: "test")
 
         let startDate = Date()
         let deleteDate = startDate.addingTimeInterval(1)
@@ -200,7 +200,7 @@ final class ClairvoyantTests: XCTestCase {
     
     func testReverseHistoryBatch() async throws {
         let storage = try await createStorage()
-        let metric: AsyncMetric<Int> = try await storage.metric("myInt", group: "test")
+        let metric: AsyncMetric<Int> = try await storage.metric(id: "myInt", group: "test")
         let now = Date.now
         let values = (1...100).reversed().map { Timestamped(value: $0, timestamp: now.advanced(by: TimeInterval(-$0))) }
         try await metric.update(values)
