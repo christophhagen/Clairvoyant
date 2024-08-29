@@ -8,6 +8,25 @@ import Foundation
  */
 public protocol MetricStorage: AnyObject {
     
+    /**
+     List all metrics in the storage.
+     */
+    func metrics() throws -> [MetricInfo]
+    
+    /**
+     Create a handle to a metric.
+     
+     If a metric doesn't exist, then it will be created.
+     If a metric with the same `id` already exists, then the types must match.
+     Changes for `name` and `description` will update the metric info, but will not be propagated to already existing handles.
+     
+     - Note: Metrics should be thread-safe, so that multiple metric handles can be used simultaneously to update the same metric.
+     
+     - Parameter id: The unique id of the metric
+     - Parameter name: An optional descriptive name of the metric
+     - Parameter description: An optional description of the metric content
+     - Parameter type: The type of data stored in the metric
+     */
     func metric<T>(_ id: MetricId, name: String?, description: String?, type: T.Type) throws -> Metric<T>
     
     func delete(metric id: MetricId) throws
