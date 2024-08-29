@@ -8,30 +8,10 @@ import Foundation
  The generic type can be any type that conforms to `MetricValue`,
  meaning it can be encoded/decoded and provides a description of its type.
  */
-public struct AsyncMetric<Value> where Value: MetricValue {
+public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
     
     /// The info of the metric
     public let info: MetricInfo
-    
-    /// The unique name of the metric in the group
-    public var id: MetricId { info.id }
-    
-    /// The group to which this metric belongs
-    public var group: String { info.id.group }
-    
-    /**
-     The name to display for the metric.
-     
-     - Note: This property is **not** updated when it is changed by the metric storage.
-     */
-    public var name: String? { info.name }
-    
-    /**
-    A description of the metric content
-    
-     - Note: This property is **not** updated when it is changed by the metric storage.
-     */
-    public var description: String? { info.description }
     
     private unowned let storage: AsyncMetricStorage
     
