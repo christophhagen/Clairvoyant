@@ -14,12 +14,10 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     static let metricListFileName = "metrics.json"
     
     static let lastValueFileName = "last"
-
-    private let logQueue = DispatchQueue(label: "clairvoyant.MultiFileStorageAsync")
-
-    /// The directory where the log files and other internal data is to be stored.
-    public let logFolder: URL
     
+    /// The directory where the log files and other internal data is to be stored.
+    public let folder: URL
+
     /// The closure to create an encoder for metric data
     public let encoderCreator: () -> AnyBinaryEncoder
 
@@ -39,9 +37,6 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
      */
     public var maximumFileSizeInBytes: Int
     
-    /// The internal metric used for logging
-    private nonisolated let logMetric: FileWriter<String>
-
     private var writers: [MetricId : Any] = [:]
     
     private var metrics: [MetricInfo] = []
@@ -55,46 +50,30 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     /**
      Create a new file-based metric storage.
 
-     The storage creates a metric with the id `logMetricId` to log internal errors.
-     It is also possible to write to this metric using ``log(_:)``.
-
-     - Parameter logFolder: The directory where the log files and other internal data is to be stored.
-     - Parameter logMetricId: The id of the metric for internal log data
      - Parameter encoderCreator: The closure to create an encoder for metric data
      - Parameter decoderCreator: The closure to create a decoder for metric data
      - Parameter fileSize: The maximum size of files in bytes
      */
     public init(
-        logFolder: URL,
-        logMetricId: MetricId,
+        folder: URL,
         encoderCreator: @escaping () -> AnyBinaryEncoder,
         decoderCreator: @escaping () -> AnyBinaryDecoder,
         fileSize: Int = 10_000_000) async throws {
+            self.folder = folder
             self.encoderCreator = encoderCreator
             self.decoderCreator = decoderCreator
             self.maximumFileSizeInBytes = fileSize
-            self.logFolder = logFolder
-            self.metricListUrl = logFolder.appendingPathComponent(MultiFileStorageAsync.metricListFileName)
-            
-            self.logMetric = FileWriter(
-                id: logMetricId,
-                folder: logFolder,
-                encoder: encoderCreator(),
-                decoder: decoderCreator(),
-                fileSize: fileSize,
-                logClosure: { msg in
-                    print(msg)
-                })
+            self.metricListUrl = folder.appendingPathComponent(MultiFileStorageAsync.metricListFileName)
 
-            try ensureExistenceOfLogFolder()
+            try ensureExistenceOfFolder()
             self.metrics = try loadMetricListFromDisk()
         }
     
-    private func ensureExistenceOfLogFolder() throws {
-        guard !logFolder.exists else {
+    private func ensureExistenceOfFolder() throws {
+        guard !folder.exists else {
             return
         }
-        try FileManager.default.createDirectory(at: logFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     }
     
     private func getOrCreateMetric<T>(_ id: MetricId, name: String?, description: String?) throws -> AsyncMetric<T> {
@@ -103,7 +82,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
             return .init(storage: self, id: id, name: name, description: description)
         }
         guard metric.valueType == T.valueType else {
-            throw MetricError.typeMismatch
+            throw FileStorageError(.metricType, "\(metric.valueType) != \(T.valueType)")
         }
         if let name, name != metric.name {
             try update(name: name, for: id)
@@ -139,7 +118,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     
     private func update(name: String, for metric: MetricId) throws {
         guard let index = index(of: metric) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, metric.description)
         }
         metrics[index].name = name
         try writeMetricListToDisk()
@@ -147,7 +126,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
 
     private func update(description: String, for metric: MetricId) throws {
         guard let index = index(of: metric) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, metric.description)
         }
         metrics[index].description = description
         try writeMetricListToDisk()
@@ -163,7 +142,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
      Calculate the size of the local storage dedicated to the metric.
      */
     public var localStorageSize: Int {
-        logFolder.fileSize
+        folder.fileSize
     }
     
     private func writer<T>(for metric: AsyncMetric<T>) throws -> FileWriter<T> {
@@ -172,7 +151,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
 
     private func writer<T>(for metric: MetricId, type: T.Type = T.self) throws -> FileWriter<T> {
         guard hasMetric(metric) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, metric.description)
         }
         if let writer = writers[metric] {
             return writer as! FileWriter<T>
@@ -181,27 +160,18 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
         let decoder = decoderCreator()
         let writer = FileWriter<T>(
             id: metric,
-            folder: logFolder,
+            folder: folder,
             encoder: encoder,
             decoder: decoder,
-            fileSize: maximumFileSizeInBytes,
-            logClosure: { [weak self] message in
-                guard let self else { return }
-                self.logQueue.sync {
-                    self.log(message, for: metric)
-                }
-            })
+            fileSize: maximumFileSizeInBytes)
         writers[metric] = writer
         return writer
     }
     
     private func removeFolder(for metric: MetricId) throws {
-        let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
-        do {
+        let url = MultiFileStorageAsync.folder(for: metric, in: folder)
+        try rethrow(.deleteFolder, metric.description) {
             try url.removeIfPresent()
-        } catch {
-            print("Failed to delete folder for metric \(metric.id) in group \(metric.group): \(error)")
-            throw MetricError.failedToDeleteLogFile
         }
     }
 
@@ -214,28 +184,6 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
         lastValues[metric] = value
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(value) }
-    }
-
-    // MARK: Logging
-
-    private nonisolated func log(_ message: String, for metric: MetricId) {
-        let entry = Timestamped.init(value: "[\(metric)] " + message)
-        print(entry.value)
-
-        let lastLogEntry = logMetric.lastValue()
-        guard entry.shouldUpdate(currentValue: lastLogEntry) else {
-            return
-        }
-
-        do {
-            try logMetric.write(entry)
-        } catch {
-            print("[ERROR] Failed to update log metric: \(error)")
-        }
-    }
-
-    public func getLogHistory(from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) -> [Timestamped<String>] {
-        logMetric.getHistory(from: start, to: end, maximumValueCount: limit)
     }
 }
 
@@ -310,7 +258,7 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
     public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) throws where T : MetricValue {
         let id = metric.id
         guard hasMetric(id) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, id.description)
         }
         let existingListeners = changeListeners[id] ?? []
         let newListener = { (value: Any) in

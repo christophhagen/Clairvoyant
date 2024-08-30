@@ -49,3 +49,10 @@ extension MetricId: Comparable {
         return lhs.id < rhs.id
     }
 }
+
+extension MetricId: CustomStringConvertible {
+
+    public var description: String {
+        "(\(group):\(id))"
+    }
+}

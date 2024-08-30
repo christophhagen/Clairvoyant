@@ -20,8 +20,12 @@ extension FileStorageProtocol {
         guard url.exists else {
             return []
         }
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(from: data)
+        let data = try rethrow(.readFile, "Metric list") {
+            try Data(contentsOf: url)
+        }
+        return try rethrow(.decodeFile, "Metric list") {
+            try JSONDecoder().decode(from: data)
+        }
     }
 
     /**
@@ -29,19 +33,16 @@ extension FileStorageProtocol {
 
      - Returns: `true`, if the file was written.
      */
-    @discardableResult
-    func writeMetricsToDisk(_ metrics: [MetricInfo]) throws -> Bool {
+    func writeMetricsToDisk(_ metrics: [MetricInfo]) throws {
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        do {
-            let data = try encoder.encode(metrics)
+        let data = try rethrow(.encodeFile, "Metric list") {
+            try encoder.encode(metrics)
+        }
+        try rethrow(.writeFile, "Metric list") {
             try data.write(to: metricListUrl)
-            return true
-        } catch {
-            print("Failed to save metric list: \(error)")
-            return false
         }
     }
 }

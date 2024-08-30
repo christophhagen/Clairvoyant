@@ -17,6 +17,10 @@ extension URL {
         try remove()
     }
 
+    func contents() throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: self, includingPropertiesForKeys: nil)
+    }
+
     var attributes: [FileAttributeKey : Any]? {
         do {
             return try FileManager.default.attributesOfItem(atPath: path)

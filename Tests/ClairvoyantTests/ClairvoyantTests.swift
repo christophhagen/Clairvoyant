@@ -31,8 +31,7 @@ final class ClairvoyantTests: XCTestCase {
 
     private func createStorage(logId: String = "log", logGroup: String = "test", fileSize: Int = 10_000_000) async throws -> MultiFileStorageAsync {
         try await .init(
-            logFolder: logFolder,
-            logMetricId: .init(id: logId, group: logGroup),
+            folder: logFolder,
             encoderCreator: JSONEncoder.init,
             decoderCreator: JSONDecoder.init,
             fileSize: fileSize)

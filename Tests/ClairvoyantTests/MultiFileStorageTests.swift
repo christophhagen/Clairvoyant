@@ -32,9 +32,7 @@ final class MultiFileStorageTests: XCTestCase {
 
     private func database() throws -> Storage {
         try Storage(
-            logFolder: databasePath,
-            logMetricId: "log",
-            logMetricGroup: "test",
+            folder: databasePath,
             encoderCreator: JSONEncoder.init,
             decoderCreator: JSONDecoder.init)
     }
@@ -391,7 +389,7 @@ final class MultiFileStorageTests: XCTestCase {
 
         do {
             _ = try storage.metric(id: metric.id, type: String.self)
-        } catch MetricError.typeMismatch {
+        } catch let error as FileStorageError where error.operation == .metricType {
 
         } catch {
             XCTFail("Should not be able to create metric with same ids and different types")
@@ -457,7 +455,7 @@ final class MultiFileStorageTests: XCTestCase {
         func catchError<T>(_ msg: String, _ block: @autoclosure () throws -> T) {
             do {
                 _ = try block()
-            } catch MetricError.notFound {
+            } catch let error as FileStorageError where error.operation == .metricId {
 
             } catch {
                 XCTFail("Should not be able to \(msg)")

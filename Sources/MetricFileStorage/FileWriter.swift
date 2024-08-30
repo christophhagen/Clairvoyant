@@ -17,8 +17,6 @@ final class FileWriter<T> where T: MetricValue {
 
     let metricId: MetricId
 
-    var logClosure: (String) -> Void
-
     private let encoder: AnyBinaryEncoder
 
     private let decoder: AnyBinaryDecoder
@@ -36,7 +34,7 @@ final class FileWriter<T> where T: MetricValue {
     /// The internal file manager used to access files
     let fileManager: FileManager = .default
 
-    init(id: MetricId, folder: URL, encoder: AnyBinaryEncoder, decoder: AnyBinaryDecoder, fileSize: Int, logClosure: @escaping (String) -> Void) {
+    init(id: MetricId, folder: URL, encoder: AnyBinaryEncoder, decoder: AnyBinaryDecoder, fileSize: Int) {
         let metricFolder = MultiFileStorageAsync.folder(for: id, in: folder)
         self.metricId = id
         self.folder = metricFolder
@@ -44,15 +42,10 @@ final class FileWriter<T> where T: MetricValue {
         self.encoder = encoder
         self.decoder = decoder
         self.maximumFileSizeInBytes = fileSize
-        self.logClosure = logClosure
     }
 
     deinit {
         try? handle?.close()
-    }
-
-    private func logError(_ message: String) {
-        logClosure(message)
     }
 
     // MARK: URLs
@@ -61,25 +54,18 @@ final class FileWriter<T> where T: MetricValue {
         fileManager.fileExists(atPath: url.path)
     }
 
-    private func ensureExistenceOfLogFolder() -> Bool {
-        guard !exists(folder) else {
-            return true
+    private func ensureExistenceOfLogFolder() throws {
+        if exists(folder) {
+            return
         }
-        do {
+        try rethrow(.createFolder, "Log folder") {
             try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
-        } catch {
-            logError("Failed to create log folder: \(error)")
-            return false
         }
-        return true
     }
 
     func deleteLastValueFile() throws {
-        do {
+        try rethrow(.deleteFile, "Last value file") {
             try fileManager.removeItem(at: lastValueUrl)
-        } catch {
-            logError("Failed to delete last value file: \(error)")
-            throw MetricError.failedToDeleteLogFile
         }
     }
 
@@ -99,59 +85,50 @@ final class FileWriter<T> where T: MetricValue {
         guard !needsNewLogFile else {
             return try createAndOpenFile(with: date)
         }
-        guard let url = findLatestFile() else {
+        guard let url = try findLatestFile() else {
             return try createAndOpenFile(with: date)
         }
         // Open new file if old one is too large
-        guard fileSize(at: url) < maximumFileSizeInBytes else {
+        guard try fileSize(at: url) < maximumFileSizeInBytes else {
             return try createAndOpenFile(with: date)
         }
-        do {
+        return try rethrow(.openFile, url.lastPathComponent) {
             let handle = try FileHandle(forUpdating: url)
             let offset = try handle.seekToEnd()
             self.handle = handle
             self.numberOfBytesInCurrentFile = Int(offset)
             return handle
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to open: \(error)")
-            throw MetricError.failedToOpenLogFile
         }
     }
 
-    private func fileSize(at url: URL) -> Int {
-        do {
+    private func fileSize(at url: URL) throws -> Int {
+        try rethrow(.fileAttributes, url.lastPathComponent) {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             return Int(attributes[.size] as? UInt64 ?? 0)
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to read size: \(error)")
-            return 0
         }
     }
 
-    private func getAllLogFilesWithStartDates() -> [(url: URL, date: Date)] {
+    private func getAllLogFilesWithStartDates() throws -> [(url: URL, date: Date)] {
         guard exists(folder) else {
             return []
         }
-        do {
-            return try fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-                .compactMap {
-                    guard let dateString = Int($0.lastPathComponent) else {
-                        return nil
-                    }
-                    return (url: $0, date: Date(timeIntervalSince1970: TimeInterval(dateString) / 1000))
-                }
-                .sorted { $0.date }
-        } catch {
-            logError("Failed to get list of files: \(error)")
-            return []
+        return try rethrow(.readFolder, folder.lastPathComponent) {
+            try folder.contents()
         }
+        .compactMap {
+            guard let dateString = Int($0.lastPathComponent) else {
+                return nil
+            }
+            return (url: $0, date: Date(timeIntervalSince1970: TimeInterval(dateString) / 1000))
+        }
+        .sorted { $0.date }
     }
 
     /**
      A sorted list of files with the date intervals of the data contained in them
      */
-    private func getAllLogFilesWithIntervals() -> [(url: URL, range: ClosedRange<Date>)] {
-        let all = getAllLogFilesWithStartDates()
+    private func getAllLogFilesWithIntervals() throws -> [(url: URL, range: ClosedRange<Date>)] {
+        let all = try getAllLogFilesWithStartDates()
         return all.indices.map { i in
             let (url, start) = all[i]
             let end = (i + 1 < all.count) ? all[i+1].date : .distantFuture
@@ -159,23 +136,20 @@ final class FileWriter<T> where T: MetricValue {
         }
     }
 
-    private func getAllLogFiles() -> [URL] {
+    private func getAllLogFiles() throws -> [URL] {
         guard exists(folder) else {
             return []
         }
-        do {
-            return try fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-                .filter { Int($0.lastPathComponent) != nil }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        } catch {
-            logError("Failed to get list of files: \(error)")
-            return []
-        }
+            return try rethrow(.readFolder, folder.lastPathComponent) {
+                try folder.contents()
+            }
+            .filter { Int($0.lastPathComponent) != nil }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
 
-    private func findLatestFile() -> URL? {
-        getAllLogFilesWithStartDates().last?.url
+    private func findLatestFile() throws -> URL? {
+        try getAllLogFilesWithStartDates().last?.url
     }
 
     /**
@@ -183,54 +157,35 @@ final class FileWriter<T> where T: MetricValue {
      */
     private func createAndOpenFile(with date: Date) throws -> FileHandle {
         let url = url(for: date)
-        do {
+        try rethrow(.writeFile, url.lastPathComponent) {
             try Data().write(to: url)
-            let handle = try FileHandle(forUpdating: url)
-            self.handle = handle
-            needsNewLogFile = false
-            numberOfBytesInCurrentFile = 0
-            return handle
-        } catch {
-            logError("Failed to create file \(url.lastPathComponent): \(error)")
-            throw MetricError.failedToOpenLogFile
         }
+        let handle = try rethrow(.openFile, url.lastPathComponent) {
+            try FileHandle(forUpdating: url)
+        }
+        self.handle = handle
+        needsNewLogFile = false
+        numberOfBytesInCurrentFile = 0
+        return handle
     }
 
     private func closeFile() {
-        do {
-            try handle?.close()
-        } catch {
-            logError("Failed to close file: \(error)")
-        }
+        try? handle?.close()
         handle = nil
         numberOfBytesInCurrentFile = 0
     }
 
     // MARK: Writing
 
-    func decodeTimestampedValues(from data: Data) throws -> [Timestamped<T>] {
-        do {
-            return try decoder.decode(from: data)
-        } catch {
-            throw MetricError.failedToDecode
+    private func encode<E>(_ value: E) throws -> Data where E: Encodable {
+        try rethrow(.encodeData, "\(value)") {
+            try encoder.encode(value)
         }
     }
 
-    func encode(_ value: Timestamped<T>) throws -> Data {
-        do {
-            return try encoder.encode(value)
-        } catch {
-            logError("Failed to encode value: \(error)")
-            throw MetricError.failedToEncode
-        }
-    }
-
-    func encode(_ values: [Timestamped<T>]) throws -> Data {
-        do {
-            return try encoder.encode(values)
-        } catch {
-            logError("Failed to encode values: \(error)")
-            throw MetricError.failedToEncode
+    private func encode(_ values: [Timestamped<T>]) throws -> Data {
+        try rethrow(.encodeData, "\(values.count) \(type(of: values))") {
+            try encoder.encode(values)
         }
     }
 
@@ -238,14 +193,7 @@ final class FileWriter<T> where T: MetricValue {
      - Throws:`failedToEncode`
      */
     private func encodeDataForStream(_ value: Timestamped<T>) throws -> TimestampedValueData {
-        let valueData: Data
-        do {
-            valueData = try encoder.encode(value.value)
-        } catch {
-            logError("Failed to encode value: \(error)")
-            throw MetricError.failedToEncode
-        }
-
+        let valueData = try encode(value.value)
         let timestampedData = value.timestamp.timeIntervalSince1970.toData()
         let count = timestampedData.count + valueData.count
         return UInt16(count).toData() + timestampedData + valueData
@@ -255,20 +203,14 @@ final class FileWriter<T> where T: MetricValue {
      - Throws: `failedToOpenLogFile`, `failedToEncode`
      */
     func write(_ value: Timestamped<T>) throws {
-        guard ensureExistenceOfLogFolder() else {
-            throw MetricError.failedToOpenLogFile
-        }
-
+        try ensureExistenceOfLogFolder()
         try write(lastValue: value)
         let streamEncodedData = try encodeDataForStream(value)
         try writeToLog(data: streamEncodedData, date: value.timestamp)
     }
 
     func writeOnlyToLog(_ value: Timestamped<T>) throws {
-        guard ensureExistenceOfLogFolder() else {
-            throw MetricError.failedToOpenLogFile
-        }
-
+        try ensureExistenceOfLogFolder()
         let streamEncodedData = try encodeDataForStream(value)
         try writeToLog(data: streamEncodedData, date: value.timestamp)
     }
@@ -279,13 +221,11 @@ final class FileWriter<T> where T: MetricValue {
     private func writeToLog(data: Data, date: Date) throws {
         let handle = try getFileHandle(date: date)
 
-        do {
+        try rethrow(.writeFile, "File for \(date.formatted())") {
             try handle.write(contentsOf: data)
-            numberOfBytesInCurrentFile += data.count
-        } catch {
-            logError("Failed to write data: \(error)")
-            throw MetricError.failedToOpenLogFile
         }
+        numberOfBytesInCurrentFile += data.count
+
         if numberOfBytesInCurrentFile >= maximumFileSizeInBytes {
             closeFile()
             needsNewLogFile = true
@@ -294,44 +234,36 @@ final class FileWriter<T> where T: MetricValue {
 
     func write(lastValue: Timestamped<T>) throws {
         let data = try encode(lastValue)
-        writeLastValue(data)
+        try writeLastValue(data)
     }
 
-    private func writeLastValue(_ data: Data) {
-        do {
+    private func writeLastValue(_ data: Data) throws {
+        try rethrow(.writeFile, "Last value") {
             try data.write(to: lastValueUrl)
-        } catch {
-            logError("Failed to save last value: \(error)")
         }
     }
 
     // MARK: Reading
 
-    private func lastValueData() -> TimestampedValueData? {
+    private func lastValueData() throws -> TimestampedValueData? {
         guard exists(lastValueUrl) else {
             // TODO: Read last value from history file?
             return nil
         }
 
-        do {
+        return try rethrow(.readFile, "Last value") {
             return try .init(contentsOf: lastValueUrl)
-        } catch {
-            logError("Failed to read last value: \(error)")
-            return nil
         }
     }
 
-    func lastValue() -> Timestamped<T>? {
-        guard let data = lastValueData() else {
+    func lastValue() throws -> Timestamped<T>? {
+        guard let data = try lastValueData() else {
             return nil
         }
-
-        do {
-            return try decoder.decode(Timestamped<T>.self, from: data)
-        } catch {
-            logError("Failed to decode last value: \(error)")
+        return try rethrow(.decodeData, "Last value") {
+            try decoder.decode(Timestamped<T>.self, from: data)
+        } onError: {
             try? deleteLastValueFile()
-            return nil
         }
     }
 
@@ -345,52 +277,37 @@ final class FileWriter<T> where T: MetricValue {
 
     private func countValues(in file: URL) throws -> Int {
         let data = try Data(contentsOf: file)
+
+        let filename = file.lastPathComponent
         var count = 0
         var currentIndex = data.startIndex
         while currentIndex < data.endIndex {
-            let startIndexOfTimestamp = currentIndex + byteCountLength
-            guard startIndexOfTimestamp <= data.endIndex else {
-                logError("File \(file): Only \(data.endIndex - currentIndex) bytes, needed \(byteCountLength) for byte count")
-                throw MetricError.logFileCorrupted
-            }
-            guard let byteCount = UInt16(fromData: data[currentIndex..<startIndexOfTimestamp]) else {
-                logError("File \(file): Invalid byte count")
-                throw MetricError.logFileCorrupted
-            }
-            let nextIndex = startIndexOfTimestamp + Int(byteCount)
-            guard nextIndex <= data.endIndex else {
-                logError("File \(file): Needed \(byteCountLength + Int(byteCount)) for timestamped value, has \(data.endIndex - startIndexOfTimestamp)")
-                throw MetricError.logFileCorrupted
-            }
-            guard byteCount >= timestampLength else {
-                logError("File \(file): Only \(byteCount) bytes, needed \(timestampLength) for timestamp")
-                throw MetricError.logFileCorrupted
-            }
+            let (_, nextIndex) = try decodeElement(data: data, file: filename, currentIndex: &currentIndex)
             count += 1
             currentIndex = nextIndex
         }
         return count
     }
 
-    func getHistory(from start: Date, to end: Date, maximumValueCount: Int? = nil) -> [Timestamped<T>] {
+    func getHistory(from start: Date, to end: Date, maximumValueCount: Int? = nil) throws -> [Timestamped<T>] {
         let count = maximumValueCount ?? .max
         guard count > 0 else {
             return []
         }
         if start <= end {
-            return getHistory(in: start...end, count: count)
+            return try getHistory(in: start...end, count: count)
         } else {
-            return getHistoryReversed(in: end...start, count: count)
+            return try getHistoryReversed(in: end...start, count: count)
         }
     }
 
-    private func getHistory(in range: ClosedRange<Date>, count: Int) -> [Timestamped<T>] {
+    private func getHistory(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] {
         var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
-        let files = getAllLogFilesWithIntervals()
+        let files = try getAllLogFilesWithIntervals()
             .filter { $0.range.overlaps(range) }
         for file in files {
-            let elements = decodeTimestampedStream(from: file.url)
+            let elements = try decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .prefix(remainingValuesToRead)
             result.append(contentsOf: elements)
@@ -402,13 +319,15 @@ final class FileWriter<T> where T: MetricValue {
         return result
     }
 
-    private func getHistoryReversed(in range: ClosedRange<Date>, count: Int) -> [Timestamped<T>] {
+    private func getHistoryReversed(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] {
         var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
-        let files = getAllLogFilesWithIntervals().filter { $0.range.overlaps(range) }.reversed()
+        let files = try getAllLogFilesWithIntervals()
+            .filter { $0.range.overlaps(range) }
+            .reversed()
         for file in files {
             // Opportunistically get history data, ignore file errors
-            let elements = decodeTimestampedStream(from: file.url)
+            let elements = try decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .suffix(remainingValuesToRead)
                 .reversed()
@@ -421,45 +340,34 @@ final class FileWriter<T> where T: MetricValue {
         return result
     }
 
-    func getFullHistory(maximumValueCount: Int? = nil) -> [Timestamped<T>] {
-        getAllLogFiles().map { self.decodeTimestampedStream(from: $0) }.joined().map { $0 }
+    func getFullHistory(maximumValueCount: Int? = nil) throws -> [Timestamped<T>] {
+        try getAllLogFiles()
+            .map { try decodeTimestampedStream(from: $0) }.joined().map { $0 }
     }
 
-    private func decodeTimestampedStream(from url: URL) -> [Timestamped<T>] {
+    private func decodeTimestampedStream(from url: URL) throws -> [Timestamped<T>] {
         guard exists(url) else {
-            logError("File \(url.lastPathComponent): Not found")
-            return []
+            throw FileStorageError(.missingFile, url.lastPathComponent)
         }
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to read: \(error)")
-            return []
+        let data = try rethrow(.readFile, url.lastPathComponent) {
+            try Data(contentsOf: url)
         }
-        do {
-            return try extractElements(from: data, file: url.lastPathComponent)
-                .map {
-                    let valueData = $0.data.advanced(by: headerByteCount)
-                    let value = try decoder.decode(T.self, from: valueData)
-                    return .init(value: value, timestamp: $0.date)
+        return try extractElements(from: data, file: url.lastPathComponent)
+            .map {
+                let valueData = $0.data.advanced(by: headerByteCount)
+                let value: T = try rethrow(.decodeFile, url.lastPathComponent) {
+                    try decoder.decode(from: valueData)
                 }
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to decode: \(error)")
-            return []
-        }
+                return .init(value: value, timestamp: $0.date)
+            }
     }
 
     private func getElements(from url: URL) throws -> [TimestampedEncodedData] {
         guard exists(url) else {
             return []
         }
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to read: \(error)")
-            throw MetricError.failedToOpenLogFile
+        let data = try rethrow(.readFile, url.lastPathComponent) {
+            try Data(contentsOf: url)
         }
         return try extractElements(from: data, file: url.lastPathComponent)
     }
@@ -468,24 +376,7 @@ final class FileWriter<T> where T: MetricValue {
         var result: [TimestampedEncodedData] = []
         var currentIndex = data.startIndex
         while currentIndex < data.endIndex {
-            let startIndexOfTimestamp = currentIndex + byteCountLength
-            guard startIndexOfTimestamp <= data.endIndex else {
-                logError("File \(file): Only \(data.endIndex - currentIndex) bytes, needed \(byteCountLength) for byte count")
-                throw MetricError.logFileCorrupted
-            }
-            guard let byteCount = UInt16(fromData: data[currentIndex..<startIndexOfTimestamp]) else {
-                logError("File \(file): Invalid byte count")
-                throw MetricError.logFileCorrupted
-            }
-            let nextIndex = startIndexOfTimestamp + Int(byteCount)
-            guard nextIndex <= data.endIndex else {
-                logError("File \(file): Needed \(byteCountLength + Int(byteCount)) for timestamped value, has \(data.endIndex - startIndexOfTimestamp)")
-                throw MetricError.logFileCorrupted
-            }
-            guard byteCount >= timestampLength else {
-                logError("File \(file): Only \(byteCount) bytes, needed \(timestampLength) for timestamp")
-                throw MetricError.logFileCorrupted
-            }
+            let (startIndexOfTimestamp, nextIndex) = try decodeElement(data: data, file: file, currentIndex: &currentIndex)
             let timestampData = data[startIndexOfTimestamp..<startIndexOfTimestamp+timestampLength]
             let timestamp = Double(fromData: timestampData)!
             let date = Date(timeIntervalSince1970: timestamp)
@@ -496,17 +387,29 @@ final class FileWriter<T> where T: MetricValue {
         return result
     }
 
+    private func decodeElement(data: Data, file: String, currentIndex: inout Int) throws -> (start: Int, next: Int) {
+        let startIndexOfTimestamp = currentIndex + byteCountLength
+        guard startIndexOfTimestamp <= data.endIndex else {
+            throw FileStorageError(.decodeFile, "File \(file): Byte count - \(data.endIndex - currentIndex) of \(byteCountLength) bytes")
+        }
+        guard let byteCount = UInt16(fromData: data[currentIndex..<startIndexOfTimestamp]) else {
+            throw FileStorageError(.decodeFile, "File \(file): Byte count - Invalid")
+        }
+        let nextIndex = startIndexOfTimestamp + Int(byteCount)
+        guard nextIndex <= data.endIndex else {
+            throw FileStorageError(.decodeFile, "File \(file): Element - \(data.endIndex - startIndexOfTimestamp) of \(byteCountLength + Int(byteCount)) bytes")
+        }
+        guard byteCount >= timestampLength else {
+            throw FileStorageError(.decodeFile, "File \(file): Timestamp - \(byteCount) of \(timestampLength) bytes")
+        }
+        return (startIndexOfTimestamp, nextIndex)
+    }
+
     // MARK: Deleting history
 
     private func deleteFile(at url: URL) throws {
-        guard exists(url) else {
-            return
-        }
-        do {
-            try fileManager.removeItem(at: url)
-        } catch {
-            logError("File \(url.lastPathComponent): Failed to delete: \(error)")
-            throw MetricError.failedToDeleteLogFile
+        try rethrow(.deleteFile, url.lastPathComponent) {
+            try url.removeIfPresent()
         }
     }
 
@@ -515,7 +418,7 @@ final class FileWriter<T> where T: MetricValue {
         closeFile()
 
         // Only select files containing items before the date
-        let files = getAllLogFilesWithIntervals()
+        let files = try getAllLogFilesWithIntervals()
 
         for (url, range) in files {
             guard range.lowerBound <= end && range.upperBound >= start else {
@@ -546,11 +449,8 @@ final class FileWriter<T> where T: MetricValue {
 
         // Create new file with different date
         let newFileUrl = self.url(for: start)
-        do {
+        try rethrow(.writeFile, newFileUrl.lastPathComponent) {
             try data.write(to: newFileUrl)
-        } catch {
-            logError("File \(newFileUrl.lastPathComponent): Failed to create updated history file: \(error)")
-            throw MetricError.failedToOpenLogFile
         }
 
         if newFileUrl.lastPathComponent == url.lastPathComponent {
@@ -559,12 +459,11 @@ final class FileWriter<T> where T: MetricValue {
         }
 
         // Delete old file
-        do {
+        try rethrow(.deleteFile, url.lastPathComponent) {
             try deleteFile(at: url)
-        } catch {
+        } onError: {
             // Attempt to restore consistency by deleting new file
             try? deleteFile(at: newFileUrl)
-            throw error
         }
     }
 

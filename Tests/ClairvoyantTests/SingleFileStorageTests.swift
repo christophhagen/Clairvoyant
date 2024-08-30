@@ -414,7 +414,7 @@ final class SingleFileStorageTests: XCTestCase {
 
         do {
             _ = try await storage.metric(id: metric.id, type: String.self)
-        } catch MetricError.typeMismatch {
+        } catch let error as FileStorageError where error.operation == .metricType {
 
         } catch {
             XCTFail("Should not be able to create metric with same ids and different types")
@@ -480,7 +480,7 @@ final class SingleFileStorageTests: XCTestCase {
         func catchError(_ msg: String, _ block: () async throws -> Void) async {
             do {
                 try await block()
-            } catch MetricError.notFound {
+            } catch let error as FileStorageError where error.operation == .metricId {
 
             } catch {
                 XCTFail("Should not be able to \(msg)")

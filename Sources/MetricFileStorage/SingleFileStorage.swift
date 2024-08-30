@@ -58,7 +58,7 @@ public actor SingleFileStorage: FileStorageProtocol {
             return .init(storage: self, id: id, name: name, description: description)
         }
         guard metric.valueType == T.valueType else {
-            throw MetricError.typeMismatch
+            throw FileStorageError(.metricType, "\(metric.valueType) != \(T.valueType)")
         }
         if let name, name != metric.name {
             try update(name: name, for: id)
@@ -82,8 +82,11 @@ public actor SingleFileStorage: FileStorageProtocol {
         metrics.first { $0.id == id }
     }
 
-    private func index(of id: MetricId) -> Int? {
-        metrics.firstIndex { $0.id == id }
+    private func index(of id: MetricId) throws -> Int {
+        guard let index = metrics.firstIndex(where: { $0.id == id }) else {
+            throw FileStorageError(.metricId, id.description)
+        }
+        return index
     }
 
     private func create(metric id: MetricId, name: String?, description: String?, type: MetricType) throws {
@@ -94,17 +97,13 @@ public actor SingleFileStorage: FileStorageProtocol {
     }
 
     private func update(name: String, for metric: MetricId) throws {
-        guard let index = index(of: metric) else {
-            throw MetricError.notFound
-        }
+        let index = try index(of: metric)
         metrics[index].name = name
         try writeMetricListToDisk()
     }
 
     private func update(description: String, for metric: MetricId) throws {
-        guard let index = index(of: metric) else {
-            throw MetricError.notFound
-        }
+        let index = try index(of: metric)
         metrics[index].description = description
         try writeMetricListToDisk()
     }
@@ -131,11 +130,8 @@ public actor SingleFileStorage: FileStorageProtocol {
 
     private func removeFolder(for metric: MetricId) throws {
         let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
-        do {
+        try rethrow(.deleteFolder, metric.description) {
             try url.removeIfPresent()
-        } catch {
-            print("Failed to delete folder for metric \(metric.id) in group \(metric.group): \(error)")
-            throw MetricError.failedToDeleteLogFile
         }
     }
 
@@ -143,7 +139,7 @@ public actor SingleFileStorage: FileStorageProtocol {
         // Check if metric is a string, then save directly
         if let value = value as? String {
             guard let data = value.data(using: .utf8) else {
-                throw MetricError.failedToEncode
+                throw FileStorageError(.encodeData, "\(value) (\(T.self))")
             }
             return data
         }
@@ -155,7 +151,7 @@ public actor SingleFileStorage: FileStorageProtocol {
             return try decoder.decode(from: data)
         }
         guard let value = String(data: data, encoding: .utf8) else {
-            throw MetricError.failedToDecode
+            throw FileStorageError(.decodeData, "\(T.self)")
         }
         return value as! T
     }
@@ -236,9 +232,7 @@ extension SingleFileStorage: AsyncMetricStorage {
     }
 
     public func delete(metric id: MetricId) throws {
-        guard let index = index(of: id) else {
-            return
-        }
+        let index = try index(of: id)
         metrics.remove(at: index)
         try writeMetricListToDisk()
         try removeFolder(for: id)
@@ -277,7 +271,7 @@ extension SingleFileStorage: AsyncMetricStorage {
     public func lastValue<T>(for metric: AsyncMetric<T>) throws -> Timestamped<T>? where T : MetricValue {
         let id = metric.id
         guard hasMetric(id) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, id.description)
         }
         // Check last value cache
         if let date = lastValues[id] {
@@ -293,7 +287,7 @@ extension SingleFileStorage: AsyncMetricStorage {
     public func history<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T : MetricValue {
         let id = metric.id
         guard hasMetric(id) else {
-            throw MetricError.notFound
+            throw FileStorageError(.metricId, id.description)
         }
 
         let count = limit ?? .max
