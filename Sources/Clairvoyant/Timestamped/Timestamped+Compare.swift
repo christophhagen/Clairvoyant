@@ -2,11 +2,11 @@ import Foundation
 
 extension TimestampedProtocol where Value: Equatable {
     
-    func isDifferentAndNewer(than other: Self) -> Bool {
+    public func isDifferentAndNewer(than other: Self) -> Bool {
         value != other.value && timestamp > other.timestamp
     }
     
-    func shouldUpdate(currentValue: Self?) -> Bool {
+    public func shouldUpdate(currentValue: Self?) -> Bool {
         guard let currentValue else {
             return true
         }
