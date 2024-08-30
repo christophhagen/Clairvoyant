@@ -37,9 +37,7 @@ actor LogFileWriter<T> where T: MetricValue {
     let fileManager: FileManager = .default
     
     init(id: MetricId, folder: URL, encoder: AnyBinaryEncoder, decoder: AnyBinaryDecoder, fileSize: Int, logClosure: @escaping (String) async -> Void) {
-        let metricFolder = folder
-            .appendingPathComponent(id.group)
-            .appendingPathComponent(id.id)
+        let metricFolder = FileBasedMetricStorage.folder(for: id, in: folder)
         self.metricId = id
         self.folder = metricFolder
         self.lastValueUrl = metricFolder.appendingPathComponent(FileBasedMetricStorage.lastValueFileName)

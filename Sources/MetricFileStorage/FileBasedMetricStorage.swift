@@ -7,8 +7,8 @@ import Clairvoyant
  The log files are grouped by the metric id, and the metric values are encoded to binary data and stored in files.
  If the files become too large, then additional files are created.
  */
-public actor FileBasedMetricStorage {
     
+public actor FileBasedMetricStorage: FileStorageProtocol {
     static let metricListFileName = "metrics.json"
     
     static let lastValueFileName = "last"
@@ -23,7 +23,7 @@ public actor FileBasedMetricStorage {
     public let decoderCreator: () -> AnyBinaryDecoder
     
     /// The url where the list of available metrics is stored
-    private let metricListUrl: URL
+    let metricListUrl: URL
     
     /**
      The maximum size of the log files (in bytes).
@@ -31,8 +31,7 @@ public actor FileBasedMetricStorage {
      Log files are split into files of this size. This limit will be slightly exceeded by each file,
      since a new file is begun if the current file already larger than the limit.
      A file always contains complete data points.
-     The maximum size is assigned to all new metrics, but does not affect already created ones.
-     The size can be changed on a metric without affecting other metrics or the observer.
+     The maximum size is assigned to all new metrics, but does not affect already created files.
      */
     public var maximumFileSizeInBytes: Int
     
@@ -100,10 +99,18 @@ public actor FileBasedMetricStorage {
         guard metric.valueType == T.valueType else {
             throw MetricError.typeMismatch
         }
-        if metric.description != description || metric.name != name {
-            try update(name: name, description: description, for: id)
+        if let name, name != metric.name {
+            try update(name: name, for: id)
         }
-        return .init(storage: self, id: id, name: name, description: description)
+        if let description, description != metric.description {
+            try update(description: description, for: id)
+        }
+
+        return .init(
+            storage: self,
+            id: id,
+            name: name ?? metric.name,
+            description: description ?? metric.description)
     }
     
     private func hasMetric(id: MetricId) -> Bool {
@@ -120,39 +127,24 @@ public actor FileBasedMetricStorage {
         try writeMetricListToDisk()
     }
     
-    private func update(name: String?, description: String?, for id: MetricId) throws {
-        // Update `metrics`
+    private func update(name: String, for metric: MetricId) throws {
+        guard let index = index(of: metric) else {
+            throw MetricError.notFound
+        }
+        metrics[index].name = name
         try writeMetricListToDisk()
     }
-    
-    private nonisolated func loadMetricListFromDisk() throws -> [MetricInfo] {
-        let url = metricListUrl
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return []
+
+    private func update(description: String, for metric: MetricId) throws {
+        guard let index = index(of: metric) else {
+            throw MetricError.notFound
         }
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(from: data)
+        metrics[index].description = description
+        try writeMetricListToDisk()
     }
-    
-    /**
-     Save the info of all currently registered metrics to disk, in a human-readable format.
-     
-     - Returns: `true`, if the file was written.
-     */
-    @discardableResult
-    private func writeMetricListToDisk() throws -> Bool {
-        
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        
-        do {
-            let data = try encoder.encode(metrics)
-            try data.write(to: metricListUrl)
-            return true
-        } catch {
-            print("Failed to save metric list: \(error)")
-            return false
-        }
+
+    private func writeMetricListToDisk() throws {
+        try writeMetricsToDisk(metrics)
     }
     
     // MARK: Files
