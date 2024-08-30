@@ -28,13 +28,9 @@ public actor SingleFileStorage: FileStorageProtocol {
     /**
      Create a new file-based metric storage.
 
-     The storage creates a metric with the id `logMetricId` to log internal errors.
-     It is also possible to write to this metric using ``log(_:)``.
-
      - Parameter logFolder: The directory where the log files and other internal data is to be stored.
      - Parameter encoder: The  encoder to convert metric values to data
      - Parameter decoder: The decoder for metric data
-     - Parameter fileSize: The maximum size of files in bytes
      */
     public init(
         logFolder: URL,
