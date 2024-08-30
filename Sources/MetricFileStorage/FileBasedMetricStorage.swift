@@ -180,6 +180,19 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
         return writer
     }
     
+    private func removeFolder(for metric: MetricId) throws {
+        let url = FileBasedMetricStorage.folder(for: metric, in: logFolder)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            print("Failed to delete folder for metric \(metric.id) in group \(metric.group): \(error)")
+            throw MetricError.failedToDeleteLogFile
+        }
+    }
+
     // MARK: Logging
 
     /**
@@ -214,7 +227,7 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
 
 extension FileBasedMetricStorage: AsyncMetricStorage {
     
-    public func metrics() async throws -> [MetricInfo] {
+    public func metrics() async -> [MetricInfo] {
         metrics
     }
     
@@ -228,6 +241,7 @@ extension FileBasedMetricStorage: AsyncMetricStorage {
         }
         metrics.remove(at: index)
         try writeMetricListToDisk()
+        try removeFolder(for: id)
         // Remove from `writers`, which also close the file
         writers[id] = nil
         lastValues[id] = nil
