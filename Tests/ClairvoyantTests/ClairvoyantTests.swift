@@ -32,7 +32,7 @@ final class ClairvoyantTests: XCTestCase {
         }
     }
 
-    private func createStorage(logId: String = "log", logGroup: String = "test", fileSize: Int = 10_000_000) async throws -> FileBasedMetricStorage {
+    private func createStorage(logId: String = "log", logGroup: String = "test", fileSize: Int = 10_000_000) async throws -> MultiFileStorageAsync {
         try await .init(
             logFolder: logFolder,
             logMetricId: logId, 
@@ -46,7 +46,7 @@ final class ClairvoyantTests: XCTestCase {
         _ = try await createStorage()
     }
 
-    func getIntMetricAndStorage(fileSize: Int = 10_000_000) async throws -> (metric: AsyncMetric<Int>, storage: FileBasedMetricStorage) {
+    func getIntMetricAndStorage(fileSize: Int = 10_000_000) async throws -> (metric: AsyncMetric<Int>, storage: MultiFileStorageAsync) {
         let storage = try await createStorage(fileSize: fileSize)
         let metric: AsyncMetric<Int> = try await storage.metric(id: "int", group: "test")
         return (metric, storage)

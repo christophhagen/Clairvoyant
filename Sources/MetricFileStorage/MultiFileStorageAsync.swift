@@ -8,7 +8,8 @@ import Clairvoyant
  If the files become too large, then additional files are created.
  */
     
-public actor FileBasedMetricStorage: FileStorageProtocol {
+public actor MultiFileStorageAsync: FileStorageProtocol {
+    
     static let metricListFileName = "metrics.json"
     
     static let lastValueFileName = "last"
@@ -76,7 +77,7 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
             self.decoderCreator = decoderCreator
             self.maximumFileSizeInBytes = fileSize
             self.logFolder = logFolder
-            self.metricListUrl = logFolder.appendingPathComponent(FileBasedMetricStorage.metricListFileName)
+            self.metricListUrl = logFolder.appendingPathComponent(MultiFileStorageAsync.metricListFileName)
             
             try ensureExistenceOfLogFolder()
             self.metrics = try loadMetricListFromDisk()
@@ -185,7 +186,7 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
     }
     
     private func removeFolder(for metric: MetricId) throws {
-        let url = FileBasedMetricStorage.folder(for: metric, in: logFolder)
+        let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return
         }
@@ -213,7 +214,7 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
         }
     }
     
-    func log(_ message: String, for metric: MetricId) async {
+    private func log(_ message: String, for metric: MetricId) async {
         let entry = "[\(metric)] " + message
         print(entry)
 
@@ -229,7 +230,7 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
     }
 }
 
-extension FileBasedMetricStorage: AsyncMetricStorage {
+extension MultiFileStorageAsync: AsyncMetricStorage {
     
     public func metrics() async -> [MetricInfo] {
         metrics
@@ -300,6 +301,7 @@ extension FileBasedMetricStorage: AsyncMetricStorage {
         try await writer(for: metric).deleteHistory(from: start, to: end)
         // Clear last value cache
         lastValues[metric.id] = nil
+        // TODO: Update change listeners if current value was deleted?
     }
     
     public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) throws where T : MetricValue {

@@ -39,7 +39,7 @@ public actor SingleFileStorage: FileStorageProtocol {
             self.encoder = encoder
             self.decoder = decoder
             self.logFolder = logFolder
-            self.metricListUrl = logFolder.appendingPathComponent(FileBasedMetricStorage.metricListFileName)
+            self.metricListUrl = logFolder.appendingPathComponent(MultiFileStorageAsync.metricListFileName)
 
             try ensureExistenceOfLogFolder()
             self.metrics = try loadMetricListFromDisk()
@@ -130,7 +130,7 @@ public actor SingleFileStorage: FileStorageProtocol {
     }
 
     private func removeFolder(for metric: MetricId) throws {
-        let url = FileBasedMetricStorage.folder(for: metric, in: logFolder)
+        let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return
         }
