@@ -121,6 +121,10 @@ public actor FileBasedMetricStorage: FileStorageProtocol {
         metrics.first { $0.id == id }
     }
     
+    private func index(of id: MetricId) -> Int? {
+        metrics.firstIndex { $0.id == id }
+    }
+
     private func create(metric id: MetricId, name: String?, description: String?, type: MetricType) throws {
         let info = MetricInfo(id: id, valueType: type, name: name, description: description)
         metrics.append(info)
