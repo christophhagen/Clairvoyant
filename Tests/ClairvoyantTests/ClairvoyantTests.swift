@@ -26,10 +26,7 @@ final class ClairvoyantTests: XCTestCase {
     }
 
     private func removeAllFiles() throws {
-        let url = logFolder
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
+        try logFolder.removeIfPresent()
     }
 
     private func createStorage(logId: String = "log", logGroup: String = "test", fileSize: Int = 10_000_000) async throws -> MultiFileStorageAsync {
@@ -113,7 +110,7 @@ final class ClairvoyantTests: XCTestCase {
         }
         try await metric.update(values)
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: logFolder.path))
+        XCTAssertTrue(logFolder.exists)
         //XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: logFolder.path).count, 1)
 
         let url = logFolder.appendingPathComponent("test/int")

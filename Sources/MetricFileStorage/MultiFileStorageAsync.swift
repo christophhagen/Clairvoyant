@@ -91,7 +91,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
         }
     
     private func ensureExistenceOfLogFolder() throws {
-        guard !FileManager.default.fileExists(atPath: logFolder.path) else {
+        guard !logFolder.exists else {
             return
         }
         try FileManager.default.createDirectory(at: logFolder, withIntermediateDirectories: true)
@@ -197,11 +197,8 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     
     private func removeFolder(for metric: MetricId) throws {
         let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return
-        }
         do {
-            try FileManager.default.removeItem(at: url)
+            try url.removeIfPresent()
         } catch {
             print("Failed to delete folder for metric \(metric.id) in group \(metric.group): \(error)")
             throw MetricError.failedToDeleteLogFile

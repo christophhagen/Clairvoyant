@@ -46,7 +46,7 @@ public actor SingleFileStorage: FileStorageProtocol {
         }
 
     private func ensureExistenceOfLogFolder() throws {
-        guard !FileManager.default.fileExists(atPath: logFolder.path) else {
+        guard !logFolder.exists else {
             return
         }
         try FileManager.default.createDirectory(at: logFolder, withIntermediateDirectories: true)
@@ -117,7 +117,7 @@ public actor SingleFileStorage: FileStorageProtocol {
 
     private func createFolder(for metric: MetricId) throws {
         let url = folderUrl(for: metric)
-        if FileManager.default.fileExists(atPath: url.path) {
+        if url.exists {
             return
         }
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -131,11 +131,8 @@ public actor SingleFileStorage: FileStorageProtocol {
 
     private func removeFolder(for metric: MetricId) throws {
         let url = MultiFileStorageAsync.folder(for: metric, in: logFolder)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return
-        }
         do {
-            try FileManager.default.removeItem(at: url)
+            try url.removeIfPresent()
         } catch {
             print("Failed to delete folder for metric \(metric.id) in group \(metric.group): \(error)")
             throw MetricError.failedToDeleteLogFile
@@ -337,7 +334,7 @@ extension SingleFileStorage: AsyncMetricStorage {
                     }
                     return
                 }
-                try FileManager.default.removeItem(at: fileUrl)
+                try fileUrl.remove()
             }
         // Update last value cache
         lastValues[metric.id] = last

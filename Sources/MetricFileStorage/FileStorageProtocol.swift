@@ -17,7 +17,7 @@ extension FileStorageProtocol {
 
     nonisolated func loadMetricListFromDisk() throws -> [MetricInfo] {
         let url = metricListUrl
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        guard url.exists else {
             return []
         }
         let data = try Data(contentsOf: url)

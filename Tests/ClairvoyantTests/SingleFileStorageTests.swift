@@ -15,12 +15,10 @@ final class SingleFileStorageTests: XCTestCase {
     }
 
     private func removeAllFiles() throws {
-        if FileManager.default.fileExists(atPath: logFolder.path) {
-            do {
-                try FileManager.default.removeItem(at: logFolder)
-            } catch {
-                print("Failed to remove database file: \(error)")
-            }
+        do {
+            try logFolder.removeIfPresent()
+        } catch {
+            print("Failed to remove database file: \(error)")
         }
     }
 
