@@ -40,7 +40,7 @@ public protocol AsyncMetricStorage: AnyObject {
 
 extension AsyncMetricStorage {
     
-    public func delete<T>(_ metric: Metric<T>) async throws {
+    public func delete<T>(_ metric: AsyncMetric<T>) async throws {
         try await delete(metric: metric.id)
     }
     
