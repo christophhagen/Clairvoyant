@@ -574,6 +574,16 @@ final class SingleFileStorageTests: XCTestCase {
         await XCTAssertEqualAsync(try await storage.numberOfDataPoints(for: metric2.id), 2 + values.count)
     }
 
+    func testStringMetric() async throws {
+        let storage = try await database()
+        let metric = try await storage.metric(id: "some", group: "test", type: String.self)
+
+        try await metric.update("First")
+        await XCTAssertEqualAsync(try await metric.currentValue()?.value, "First")
+
+        try await metric.update("Second")
+        await XCTAssertEqualAsync(try await metric.currentValue()?.value, "Second")
+    }
 }
 
 func XCTAssertEqualAsync<T>(
