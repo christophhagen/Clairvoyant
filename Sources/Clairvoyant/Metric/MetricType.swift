@@ -130,3 +130,10 @@ extension MetricType: ExpressibleByStringLiteral {
         self.init(rawValue: value)
     }
 }
+
+extension MetricType: Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rawValue)
+    }
+}

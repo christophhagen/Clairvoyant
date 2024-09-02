@@ -61,4 +61,8 @@ extension MetricStorage {
     public func metric<T>(id: String, group: String, name: String? = nil, description: String? = nil, type: T.Type = T.self) throws -> Metric<T> {
         try metric(.init(id: id, group: group), name: name, description: description, type: type)
     }
+
+    public func metric<T>(info: MetricInfo, type: T.Type = T.self) throws -> Metric<T> {
+        try metric(info.id, name: info.name, description: info.description, type: T.self)
+    }
 }

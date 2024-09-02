@@ -23,32 +23,6 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      Creating a metric manually may result in subsequent operations to fail, if the metric is not known to the metric storage.
      - Note: Metrics keep an `unowned` reference to the storage interface, so the storage object lifetime must exceed the lifetime of the metrics.
      */
-    public init(storage: any AsyncMetricStorage, id: String, group: String, name: String? = nil, description: String? = nil) {
-        let id = MetricId(id: id, group: group)
-        self.init(storage: storage, id: id, name: name, description: description)
-    }
-    
-    /**
-     Create a new metric.
-     
-     This constructor should be called by metric storage interfaces,
-     which can ensure correct registration of metrics.
-     Creating a metric manually may result in subsequent operations to fail, if the metric is not known to the metric storage.
-     - Note: Metrics keep an `unowned` reference to the storage interface, so the storage object lifetime must exceed the lifetime of the metrics.
-     */
-    public init(storage: any AsyncMetricStorage, id: MetricId, name: String? = nil, description: String? = nil) {
-        let info = MetricInfo(id: id, valueType: Value.valueType, name: name, description: description)
-        self.init(storage: storage, info: info)
-    }
-    
-    /**
-     Create a new metric.
-     
-     This constructor should be called by metric storage interfaces,
-     which can ensure correct registration of metrics.
-     Creating a metric manually may result in subsequent operations to fail, if the metric is not known to the metric storage.
-     - Note: Metrics keep an `unowned` reference to the storage interface, so the storage object lifetime must exceed the lifetime of the metrics.
-     */
     public init(storage: any AsyncMetricStorage, info: MetricInfo) {
         self.storage = storage
         self.info = info
@@ -134,4 +108,8 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
     public func onChange(_ changeCallback: @escaping (_ value: Timestamped<Value>) -> Void) async throws {
         try await storage.add(changeListener: changeCallback, for: self)
     }
+}
+
+extension AsyncMetric: MetricBase {
+
 }

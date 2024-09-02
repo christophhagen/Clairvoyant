@@ -7,15 +7,26 @@ public struct MetricInfo {
 
     /// The unique id of the metric in the group
     public let id: MetricId
-    
+
+    /// The additional details of the metric
+    public var details: MetricDetails
+
     /// The  name of the metric
-    public var name: String?
-    
+    public var name: String? {
+        get { details.name }
+        set { details.name = newValue }
+    }
+
     /// A description of the metric content
-    public var description: String?
+    public var description: String? {
+        get { details.description }
+        set { details.description = newValue }
+    }
 
     /// An identifier to describe the type of values encoded in a metric
-    public let valueType: MetricType
+    public var valueType: MetricType {
+        details.valueType
+    }
 
     /**
      Create a new metric info.
@@ -26,10 +37,7 @@ public struct MetricInfo {
      - Parameter valueType: An identifier to describe the type of values encoded in a metric
      */
     public init(id: String, group: String, valueType: MetricType, name: String? = nil, description: String? = nil) {
-        self.id = .init(id: id, group: group)
-        self.valueType = valueType
-        self.name = name
-        self.description = description
+        self.init(id: .init(id: id, group: group), valueType: valueType, name: name, description: description)
     }
     
     /**
@@ -40,11 +48,21 @@ public struct MetricInfo {
      - Parameter valueType: An identifier to describe the type of values encoded in a metric
      */
     public init(id: MetricId, valueType: MetricType, name: String? = nil, description: String? = nil) {
-        self.id = id
-        self.valueType = valueType
-        self.name = name
-        self.description = description
+        self.init(id: id, details: .init(valueType: valueType, name: name, description: description))
     }
+
+    /**
+     Create a new metric info.
+     - Parameter id: The unique id of the metric
+     - Parameter name: The name of the metric
+     - Parameter description: A description of the metric content
+     - Parameter valueType: An identifier to describe the type of values encoded in a metric
+     */
+    public init(id: MetricId, details: MetricDetails) {
+        self.id = id
+        self.details = details
+    }
+
 }
 
 extension MetricInfo: Codable {
@@ -54,9 +72,10 @@ extension MetricInfo: Codable {
         self.id = .init(
             id: try container.decode(String.self, forKey: .id),
             group: try container.decode(String.self, forKey: .group))
-        self.valueType = try container.decode(MetricType.self, forKey: .valueType)
-        self.name = try container.decodeIfPresent(String.self, forKey: .name)
-        self.description = try container.decodeIfPresent(String.self, forKey: .description)
+        let valueType = try container.decode(MetricType.self, forKey: .valueType)
+        let name = try container.decodeIfPresent(String.self, forKey: .name)
+        let description = try container.decodeIfPresent(String.self, forKey: .description)
+        self.details = .init(valueType: valueType, name: name, description: description)
     }
     
     public func encode(to encoder: any Encoder) throws {
