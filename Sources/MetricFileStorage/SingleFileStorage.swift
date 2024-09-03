@@ -241,53 +241,47 @@ extension SingleFileStorage: AsyncMetricStorage {
         changeListeners[id] = nil
     }
 
-    public func store<T>(_ value: Timestamped<T>, for metric: AsyncMetric<T>) throws where T : MetricValue {
-        let id = metric.id
-
-        try store(file: value, for: id)
+    public func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T : MetricValue {
+        try store(file: value, for: metric)
         // Update last value cache
-        lastValues[id] = value.timestamp
+        lastValues[metric] = value.timestamp
         // Notify all listeners
-        changeListeners[id]?.forEach { $0(value) }
+        changeListeners[metric]?.forEach { $0(value) }
     }
     
-    public func store<S, T>(_ values: S, for metric: AsyncMetric<T>) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
-        let id = metric.id
-
+    public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         var last: Date? = nil
         for value in values {
-            try store(file: value, for: id)
+            try store(file: value, for: metric)
             last = value.timestamp
         }
         guard let last else {
             return
         }
         // Update last value cache
-        lastValues[id] = last
+        lastValues[metric] = last
         // Notify all listeners
-        changeListeners[id]?.forEach { $0(last) }
+        changeListeners[metric]?.forEach { $0(last) }
     }
     
-    public func lastValue<T>(for metric: AsyncMetric<T>) throws -> Timestamped<T>? where T : MetricValue {
-        let id = metric.id
-        guard hasMetric(id) else {
-            throw FileStorageError(.metricId, id.description)
+    public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
+        guard hasMetric(metric) else {
+            throw FileStorageError(.metricId, metric.description)
         }
         // Check last value cache
-        if let date = lastValues[id] {
-            return try value(for: date, of: id)
+        if let date = lastValues[metric] {
+            return try value(for: date, of: metric)
         }
-        guard let value: Timestamped<T> = try readLastValue(for: id) else {
+        guard let value: Timestamped<T> = try readLastValue(for: metric) else {
             return nil
         }
-        lastValues[id] = value.timestamp
+        lastValues[metric] = value.timestamp
         return value
     }
     
-    public func history<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T : MetricValue {
-        let id = metric.id
-        guard hasMetric(id) else {
-            throw FileStorageError(.metricId, id.description)
+    public func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T : MetricValue {
+        guard hasMetric(metric) else {
+            throw FileStorageError(.metricId, metric.description)
         }
 
         let count = limit ?? .max
@@ -296,24 +290,23 @@ extension SingleFileStorage: AsyncMetricStorage {
         }
         let isReversed = start > end
         let range = isReversed ? end...start : start...end
-        let files = try timestamps(for: id).filter(range.contains)
+        let files = try timestamps(for: metric).filter(range.contains)
 
         //usleep(1000 * 1000)
         guard isReversed else {
             return try files.prefix(count).map { timestamp in
-                try value(for: timestamp, of: id)
+                try value(for: timestamp, of: metric)
             }
         }
         return try files.suffix(count).reversed().map { timestamp in
-            try value(for: timestamp, of: id)
+            try value(for: timestamp, of: metric)
         }
     }
     
-    public func deleteHistory<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date) throws where T : MetricValue {
-        let id = metric.id
+    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
         let isReversed = start <= end
         let range = isReversed ? start...end : end...start
-        let url = folderUrl(for: id)
+        let url = folderUrl(for: metric)
         var last: Date? = nil
         try FileManager.default
             .contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
@@ -331,16 +324,15 @@ extension SingleFileStorage: AsyncMetricStorage {
                 try fileUrl.remove()
             }
         // Update last value cache
-        lastValues[metric.id] = last
+        lastValues[metric] = last
         // TODO: Update change listeners if current value was deleted?
     }
     
-    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) async throws where T : MetricValue {
-        let id = metric.id
-        let existingListeners = changeListeners[id] ?? []
+    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) async throws where T : MetricValue {
+        let existingListeners = changeListeners[metric] ?? []
         let newListener = { (value: Any) in
             changeListener(value as! Timestamped<T>)
         }
-        changeListeners[id] = existingListeners + [newListener]
+        changeListeners[metric] = existingListeners + [newListener]
     }
 }

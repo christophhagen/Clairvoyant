@@ -177,7 +177,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
 
     // MARK: Data
 
-    private func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T : MetricValue {
+    private func store<T>(value: Timestamped<T>, for metric: MetricId) throws where T : MetricValue {
         // Get writer and save value
         try writer(for: metric).write(value)
         // Update last value cache
@@ -210,14 +210,13 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         changeListeners[id] = nil
     }
     
-    public func store<T>(_ value: Timestamped<T>, for metric: AsyncMetric<T>) throws where T : MetricValue {
-        try store(value, for: metric.id)
+    public func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T : MetricValue {
+        try store(value: value, for: metric)
     }
     
-    public func store<S, T>(_ values: S, for metric: AsyncMetric<T>) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
-        let id = metric.id
+    public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         var last: Timestamped<T>? = nil
-        let writer = try writer(for: metric)
+        let writer = try writer(for: metric, type: T.self)
         for value in values {
             // Get writer and save value
             try writer.writeOnlyToLog(value)
@@ -228,42 +227,40 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         }
         try writer.write(lastValue: last)
         // Update last value cache
-        lastValues[id] = last
+        lastValues[metric] = last
         // Notify all listeners
-        changeListeners[id]?.forEach { $0(last) }
+        changeListeners[metric]?.forEach { $0(last) }
     }
     
-    public func lastValue<T>(for metric: AsyncMetric<T>) throws -> Timestamped<T>? where T : MetricValue {
-        let id = metric.id
+    public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
         // Check last value cache
-        if let value = lastValues[id] {
+        if let value = lastValues[metric] {
             return (value as! Timestamped<T>)
         }
         // Get writer and read value
         return try writer(for: metric).lastValue()
     }
     
-    public func history<T>(for metric: AsyncMetric<T>, from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<T>] where T : MetricValue {
+    public func history<T>(for metric: MetricId, from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<T>] where T : MetricValue {
         try writer(for: metric).getHistory(from: start, to: end, maximumValueCount: limit)
     }
     
-    public func deleteHistory<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date) throws where T : MetricValue {
+    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
         // Get writer and remove values
-        try writer(for: metric).deleteHistory(from: start, to: end)
+        try writer(for: metric, type: T.self).deleteHistory(from: start, to: end)
         // Clear last value cache
-        lastValues[metric.id] = nil
+        lastValues[metric] = nil
         // TODO: Update change listeners if current value was deleted?
     }
     
-    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) throws where T : MetricValue {
-        let id = metric.id
-        guard hasMetric(id) else {
-            throw FileStorageError(.metricId, id.description)
+    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T : MetricValue {
+        guard hasMetric(metric) else {
+            throw FileStorageError(.metricId, metric.description)
         }
-        let existingListeners = changeListeners[id] ?? []
+        let existingListeners = changeListeners[metric] ?? []
         let newListener = { (value: Any) in
             changeListener(value as! Timestamped<T>)
         }
-        changeListeners[id] = existingListeners + [newListener]
+        changeListeners[metric] = existingListeners + [newListener]
     }
 }

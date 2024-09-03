@@ -151,23 +151,22 @@ public final class MultiFileStorage: FileStorageProtocol {
         folder.fileSize
     }
 
-    private func writer<T>(for metric: Metric<T>) throws -> FileWriter<T> {
-        let id = metric.id
-        guard hasMetric(id) else {
-            throw FileStorageError(.metricId, metric.id.description)
+    private func writer<T>(for metric: MetricId, type: T.Type) throws -> FileWriter<T> {
+        guard hasMetric(metric) else {
+            throw FileStorageError(.metricId, metric.description)
         }
-        if let writer = writers[id] {
+        if let writer = writers[metric] {
             return writer as! FileWriter<T>
         }
         let encoder = encoderCreator()
         let decoder = decoderCreator()
         let writer = FileWriter<T>(
-            id: id,
+            id: metric,
             folder: folder,
             encoder: encoder,
             decoder: decoder,
             fileSize: maximumFileSizeInBytes)
-        writers[id] = writer
+        writers[metric] = writer
         return writer
     }
 
@@ -180,8 +179,8 @@ public final class MultiFileStorage: FileStorageProtocol {
 
     // MARK: Statistics
 
-    public func numberOfDataPoints<T>(for metric: Metric<T>) throws -> Int {
-        try writer(for: metric).numberOfDataPoints()
+    public func numberOfDataPoints<T>(for metric: Metric<T>) throws -> Int where T: MetricValue {
+        try writer(for: metric.id, type: T.self).numberOfDataPoints()
     }
 }
 
@@ -212,23 +211,21 @@ extension MultiFileStorage: MetricStorage {
         }
     }
 
-    public func store<T>(_ value: Timestamped<T>, for metric: Metric<T>) throws where T : MetricValue {
+    public func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T: MetricValue {
         try queue.sync {
-            let id = metric.id
             // Get writer and save value
-            try writer(for: metric).write(value)
+            try writer(for: metric, type: T.self).write(value)
             // Update last value cache
-            lastValues[id] = value
+            lastValues[metric] = value
             // Notify all listeners
-            changeListeners[id]?.forEach { $0(value) }
+            changeListeners[metric]?.forEach { $0(value) }
         }
     }
 
-    public func store<S, T>(_ values: S, for metric: Metric<T>) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
+    public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         try queue.sync {
-            let id = metric.id
             var last: Timestamped<T>? = nil
-            let writer = try writer(for: metric)
+            let writer = try writer(for: metric, type: T.self)
             for value in values {
                 // Get writer and save value
                 try writer.writeOnlyToLog(value)
@@ -239,50 +236,48 @@ extension MultiFileStorage: MetricStorage {
             }
             try writer.write(lastValue: last)
             // Update last value cache
-            lastValues[id] = last
+            lastValues[metric] = last
             // Notify all listeners
-            changeListeners[id]?.forEach { $0(last) }
+            changeListeners[metric]?.forEach { $0(last) }
         }
     }
 
-    public func lastValue<T>(for metric: Metric<T>) throws -> Timestamped<T>? where T : MetricValue {
-        let id = metric.id
-        return try queue.sync {
+    public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
+        try queue.sync {
             // Check last value cache
-            if let value = lastValues[id] {
+            if let value = lastValues[metric] {
                 return (value as! Timestamped<T>)
             }
             // Get writer and read value
-            return try writer(for: metric).lastValue()
+            return try writer(for: metric, type: T.self).lastValue()
         }
     }
 
-    public func history<T>(for metric: Metric<T>, from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<T>] where T : MetricValue {
+    public func history<T>(for metric: MetricId, from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<T>] where T : MetricValue {
         try queue.sync {
-            try writer(for: metric).getHistory(from: start, to: end, maximumValueCount: limit)
+            try writer(for: metric, type: T.self).getHistory(from: start, to: end, maximumValueCount: limit)
         }
     }
 
-    public func deleteHistory<T>(for metric: Metric<T>, from start: Date, to end: Date) throws where T : MetricValue {
+    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
         try queue.sync {
             // Get writer and remove values
-            let writer = try writer(for: metric)
+            let writer = try writer(for: metric, type: T.self)
             try writer.deleteHistory(from: start, to: end)
             try writer.deleteLastValueFile()
             // Clear last value cache
-            lastValues[metric.id] = nil
+            lastValues[metric] = nil
             // TODO: Update change listeners if current value was deleted?
         }
     }
 
-    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: Metric<T>) throws where T : MetricValue {
-        let id = metric.id
+    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T : MetricValue {
         queue.sync {
-            let existingListeners = changeListeners[id] ?? []
+            let existingListeners = changeListeners[metric] ?? []
             let newListener = { (value: Any) in
                 changeListener(value as! Timestamped<T>)
             }
-            changeListeners[id] = existingListeners + [newListener]
+            changeListeners[metric] = existingListeners + [newListener]
         }
     }
 }

@@ -18,12 +18,17 @@ extension MetricProtocol {
      
      - Note: This property is **not** updated when it is changed by the metric storage.
      */
-    public var name: String? { info.name }
-    
+    public var name: String? { info.details.name }
+
     /**
     A description of the metric content
     
      - Note: This property is **not** updated when it is changed by the metric storage.
      */
-    public var description: String? { info.description }
+    public var description: String? { info.details.description }
+
+    /// The additional details of the metric
+    public var details: MetricDetails {
+        info.details
+    }
 }

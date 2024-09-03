@@ -14,21 +14,6 @@ public protocol MetricBase {
 
 extension MetricBase {
 
-    /// The additional details of the metric
-    public var details: MetricDetails {
-        info.details
-    }
-
-    /// The  name of the metric
-    public var name: String? {
-        info.details.name
-    }
-
-    /// A description of the metric content
-    public var description: String? {
-        info.description
-    }
-
     /**
      Create a new metric.
 

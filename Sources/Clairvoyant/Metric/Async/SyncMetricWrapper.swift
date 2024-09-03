@@ -30,27 +30,27 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.delete(metric: id)
     }
     
-    public func store<T>(_ value: Timestamped<T>, for metric: AsyncMetric<T>) async throws where T : MetricValue {
-        try convert(metric).update(value)
+    public func store<T>(_ value: Timestamped<T>, for metric: MetricId) async throws where T: MetricValue {
+        try storage.store(value, for: metric)
     }
     
-    public func store<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
-        try convert(metric).update(values)
+    public func store<S, T>(_ values: S, for metric: MetricId) async throws where S : Sequence, S.Element == Timestamped<T>, T: MetricValue {
+        try storage.store(values, for: metric)
     }
     
-    public func lastValue<T>(for metric: AsyncMetric<T>) async throws -> Timestamped<T>? where T : MetricValue {
-        try convert(metric).currentValue()
+    public func lastValue<T>(for metric: MetricId) async throws -> Timestamped<T>? where T: MetricValue {
+        try storage.lastValue(for: metric)
     }
     
-    public func history<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date, limit: Int?) async throws -> [Timestamped<T>] where T : MetricValue {
-        try convert(metric).history(from: start, to: end, limit: limit)
+    public func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) async throws -> [Timestamped<T>] where T: MetricValue {
+        try storage.history(for: metric, from: start, to: end, limit: limit)
     }
     
-    public func deleteHistory<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date) async throws where T : MetricValue {
-        try convert(metric).deleteHistory(from: start, to: end)
+    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) async throws where T: MetricValue {
+        try storage.deleteHistory(for: metric, type: type, from: start, to: end)
     }
     
-    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) async throws where T : MetricValue {
-        try storage.add(changeListener: changeListener, for:  try convert(metric))
+    public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) async throws where T: MetricValue {
+        try storage.add(changeListener: changeListener, for:  metric)
     }
 }

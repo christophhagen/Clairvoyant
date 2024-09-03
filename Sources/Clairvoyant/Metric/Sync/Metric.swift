@@ -55,7 +55,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
         guard value.shouldUpdate(currentValue: try currentValue()) else {
             return false
         }
-        try storage.store(value, for: self)
+        try storage.store(value, for: id)
         return true
     }
     
@@ -67,7 +67,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      */
     public func update<S>(_ values: S) throws where S: Sequence, S.Element == Timestamped<Value> {
         let valuesToAdd = values.valuesToUpdate(currentValue: try currentValue())
-        try storage.store(valuesToAdd, for: self)
+        try storage.store(valuesToAdd, for: id)
     }
     
     /**
@@ -75,14 +75,14 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      - Returns: The current value of the metric (timestamped), if it exists
      */
     public func currentValue() throws -> Timestamped<Value>? {
-        try storage.lastValue(for: self)
+        try storage.lastValue(for: id)
     }
     
     /**
      Get the history of the metric values in the given interval, up to an optional limit of values.
      */
     public func history(from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<Value>] {
-        try storage.history(for: self, from: start, to: end, limit: limit)
+        try storage.history(for: id, from: start, to: end, limit: limit)
     }
     
     /**
@@ -91,9 +91,9 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
     public func history(in range: ClosedRange<Date>, order: MetricHistoryDirection = .olderToNewer, limit: Int? = nil) throws -> [Timestamped<Value>] {
         switch order {
         case .newerToOlder:
-            return try storage.history(for: self, from: range.upperBound, to: range.lowerBound, limit: limit)
+            return try storage.history(for: id, from: range.upperBound, to: range.lowerBound, limit: limit)
         case .olderToNewer:
-            return try storage.history(for: self, from: range.lowerBound, to: range.upperBound, limit: limit)
+            return try storage.history(for: id, from: range.lowerBound, to: range.upperBound, limit: limit)
         }
     }
     
@@ -101,7 +101,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      Delete the history in the given interval (including start and end)
      */
     public func deleteHistory(from start: Date = .distantPast, to end: Date = .distantFuture) throws {
-        try storage.deleteHistory(for: self, from: start, to: end)
+        try storage.deleteHistory(for: id, type: Value.self, from: start, to: end)
     }
     
     /**
@@ -111,7 +111,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      - Throws: An error by the storage interface if the callback could not be registered
      */
     public func onChange(_ changeCallback: @escaping (_ value: Timestamped<Value>) -> Void) throws {
-        try storage.add(changeListener: changeCallback, for: self)
+        try storage.add(changeListener: changeCallback, for: id)
     }
 }
 

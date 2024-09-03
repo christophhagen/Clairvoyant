@@ -52,7 +52,7 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
         guard value.shouldUpdate(currentValue: try await currentValue()) else {
             return false
         }
-        try await storage.store(value, for: self)
+        try await storage.store(value, for: id)
         return true
     }
     
@@ -63,21 +63,21 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      */
     public func update<S>(_ values: S) async throws where S: Sequence, S.Element == Timestamped<Value> {
         let valuesToAdd = values.valuesToUpdate(currentValue: try await currentValue())
-        try await storage.store(valuesToAdd, for: self)
+        try await storage.store(valuesToAdd, for: id)
     }
     
     /**
      Get the current value of the metric.
      */
     public func currentValue() async throws -> Timestamped<Value>? {
-        try await storage.lastValue(for: self)
+        try await storage.lastValue(for: id)
     }
     
     /**
      Get the history of the metric values in the given interval, up to an optional limit of values.
      */
     public func history(from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) async throws -> [Timestamped<Value>] {
-        try await storage.history(for: self, from: start, to: end, limit: limit)
+        try await storage.history(for: id, from: start, to: end, limit: limit)
     }
     
     /**
@@ -86,9 +86,9 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
     public func history(in range: ClosedRange<Date>, order: MetricHistoryDirection = .olderToNewer, limit: Int? = nil) async throws -> [Timestamped<Value>] {
         switch order {
         case .newerToOlder:
-            return try await storage.history(for: self, from: range.upperBound, to: range.lowerBound, limit: limit)
+            return try await storage.history(for: id, from: range.upperBound, to: range.lowerBound, limit: limit)
         case .olderToNewer:
-            return try await storage.history(for: self, from: range.lowerBound, to: range.upperBound, limit: limit)
+            return try await storage.history(for: id, from: range.lowerBound, to: range.upperBound, limit: limit)
         }
     }
     
@@ -96,7 +96,7 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      Delete the history in the given interval (including start and end)
      */
     public func deleteHistory(from start: Date = .distantPast, to end: Date = .distantFuture) async throws {
-        try await storage.deleteHistory(for: self, from: start, to: end)
+        try await storage.deleteHistory(for: id, type: Value.self, from: start, to: end)
     }
     
     /**
@@ -106,7 +106,7 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      - Throws: An error by the storage interface if the callback could not be registered
      */
     public func onChange(_ changeCallback: @escaping (_ value: Timestamped<Value>) -> Void) async throws {
-        try await storage.add(changeListener: changeCallback, for: self)
+        try await storage.add(changeListener: changeCallback, for: id)
     }
 }
 

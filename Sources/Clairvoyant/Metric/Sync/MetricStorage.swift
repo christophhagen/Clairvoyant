@@ -31,17 +31,17 @@ public protocol MetricStorage: AnyObject {
     
     func delete(metric id: MetricId) throws
     
-    func store<T>(_ value: Timestamped<T>, for metric: Metric<T>) throws
-    
-    func store<S, T>(_ values: S, for metric: Metric<T>) throws where S: Sequence, S.Element == Timestamped<T>
-    
-    func lastValue<T>(for metric: Metric<T>) throws -> Timestamped<T>?
-    
-    func history<T>(for metric: Metric<T>, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>]
-    
-    func deleteHistory<T>(for metric: Metric<T>, from start: Date, to end: Date) throws
-    
-    func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: Metric<T>) throws
+    func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T: MetricValue
+
+    func store<S, T>(_ values: S, for metric: MetricId) throws where S: Sequence, S.Element == Timestamped<T>, T: MetricValue
+
+    func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T: MetricValue
+
+    func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T: MetricValue
+
+    func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T: MetricValue
+
+    func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T: MetricValue
 }
 
 extension MetricStorage {

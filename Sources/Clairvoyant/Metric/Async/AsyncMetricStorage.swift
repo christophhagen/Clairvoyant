@@ -25,17 +25,17 @@ public protocol AsyncMetricStorage: AnyObject {
     
     func delete(metric id: MetricId) async throws
     
-    func store<T>(_ value: Timestamped<T>, for metric: AsyncMetric<T>) async throws
-    
-    func store<S, T>(_ values: S, for metric: AsyncMetric<T>) async throws where S: Sequence, S.Element == Timestamped<T>
-    
-    func lastValue<T>(for metric: AsyncMetric<T>) async throws -> Timestamped<T>?
-    
-    func history<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date, limit: Int?) async throws -> [Timestamped<T>]
-    
-    func deleteHistory<T>(for metric: AsyncMetric<T>, from start: Date, to end: Date) async throws
-    
-    func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: AsyncMetric<T>) async throws
+    func store<T>(_ value: Timestamped<T>, for metric: MetricId) async throws where T: MetricValue
+
+    func store<S, T>(_ values: S, for metric: MetricId) async throws where S: Sequence, S.Element == Timestamped<T>, T: MetricValue
+
+    func lastValue<T>(for metric: MetricId) async throws -> Timestamped<T>? where T: MetricValue
+
+    func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) async throws -> [Timestamped<T>] where T: MetricValue
+
+    func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) async throws where T: MetricValue
+
+    func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) async throws where T: MetricValue
 }
 
 extension AsyncMetricStorage {
