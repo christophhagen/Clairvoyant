@@ -4,7 +4,9 @@ import Clairvoyant
 private typealias TimestampedValueData = Data
 private typealias TimestampedEncodedData = (date: Date, data: Data)
 
-final class FileWriter<T> where T: MetricValue {
+final class GenericFileWriter {
+
+    static let lastValueFileName = "last"
 
     var maximumFileSizeInBytes: Int
 
@@ -38,7 +40,7 @@ final class FileWriter<T> where T: MetricValue {
         let metricFolder = MultiFileStorageAsync.folder(for: id, in: folder)
         self.metricId = id
         self.folder = metricFolder
-        self.lastValueUrl = metricFolder.appendingPathComponent(MultiFileStorageAsync.lastValueFileName)
+        self.lastValueUrl = metricFolder.appendingPathComponent(GenericFileWriter.lastValueFileName)
         self.encoder = encoder
         self.decoder = decoder
         self.maximumFileSizeInBytes = fileSize
@@ -183,7 +185,7 @@ final class FileWriter<T> where T: MetricValue {
         }
     }
 
-    private func encode(_ values: [Timestamped<T>]) throws -> Data {
+    private func encode<T>(_ values: [Timestamped<T>]) throws -> Data where T: Encodable {
         try rethrow(.encodeData, "\(values.count) \(type(of: values))") {
             try encoder.encode(values)
         }
@@ -192,7 +194,7 @@ final class FileWriter<T> where T: MetricValue {
     /**
      - Throws:`failedToEncode`
      */
-    private func encodeDataForStream(_ value: Timestamped<T>) throws -> TimestampedValueData {
+    private func encodeDataForStream<T>(_ value: Timestamped<T>) throws -> TimestampedValueData where T: Encodable {
         let valueData = try encode(value.value)
         let timestampedData = value.timestamp.timeIntervalSince1970.toData()
         let count = timestampedData.count + valueData.count
@@ -202,14 +204,14 @@ final class FileWriter<T> where T: MetricValue {
     /**
      - Throws: `failedToOpenLogFile`, `failedToEncode`
      */
-    func write(_ value: Timestamped<T>) throws {
+    func write<T>(_ value: Timestamped<T>) throws where T: Encodable {
         try ensureExistenceOfLogFolder()
         try write(lastValue: value)
         let streamEncodedData = try encodeDataForStream(value)
         try writeToLog(data: streamEncodedData, date: value.timestamp)
     }
 
-    func writeOnlyToLog(_ value: Timestamped<T>) throws {
+    func writeOnlyToLog<T>(_ value: Timestamped<T>) throws where T: Encodable {
         try ensureExistenceOfLogFolder()
         let streamEncodedData = try encodeDataForStream(value)
         try writeToLog(data: streamEncodedData, date: value.timestamp)
@@ -232,7 +234,7 @@ final class FileWriter<T> where T: MetricValue {
         }
     }
 
-    func write(lastValue: Timestamped<T>) throws {
+    func write<T>(lastValue: Timestamped<T>) throws where T: Encodable {
         let data = try encode(lastValue)
         try writeLastValue(data)
     }
@@ -256,7 +258,16 @@ final class FileWriter<T> where T: MetricValue {
         }
     }
 
-    func lastValue() throws -> Timestamped<T>? {
+    func lastValueTimestamp() throws -> Date? {
+        guard let data = try lastValueData() else {
+            return nil
+        }
+        return try rethrow(.decodeData, "Last value") {
+            try decoder.decode(UnknownTimestamped.self, from: data).timestamp
+        }
+    }
+
+    func lastValue<T>() throws -> Timestamped<T>? where T: Decodable {
         guard let data = try lastValueData() else {
             return nil
         }
@@ -289,7 +300,7 @@ final class FileWriter<T> where T: MetricValue {
         return count
     }
 
-    func getHistory(from start: Date, to end: Date, maximumValueCount: Int? = nil) throws -> [Timestamped<T>] {
+    func getHistory<T>(from start: Date, to end: Date, maximumValueCount: Int? = nil) throws -> [Timestamped<T>] where T: Decodable {
         let count = maximumValueCount ?? .max
         guard count > 0 else {
             return []
@@ -301,13 +312,13 @@ final class FileWriter<T> where T: MetricValue {
         }
     }
 
-    private func getHistory(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] {
+    private func getHistory<T>(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] where T: Decodable {
         var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
         let files = try getAllLogFilesWithIntervals()
             .filter { $0.range.overlaps(range) }
         for file in files {
-            let elements = try decodeTimestampedStream(from: file.url)
+            let elements: ArraySlice<Timestamped<T>> = try decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .prefix(remainingValuesToRead)
             result.append(contentsOf: elements)
@@ -319,7 +330,7 @@ final class FileWriter<T> where T: MetricValue {
         return result
     }
 
-    private func getHistoryReversed(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] {
+    private func getHistoryReversed<T>(in range: ClosedRange<Date>, count: Int) throws -> [Timestamped<T>] where T: Decodable {
         var remainingValuesToRead = count
         var result: [Timestamped<T>] = []
         let files = try getAllLogFilesWithIntervals()
@@ -327,7 +338,7 @@ final class FileWriter<T> where T: MetricValue {
             .reversed()
         for file in files {
             // Opportunistically get history data, ignore file errors
-            let elements = try decodeTimestampedStream(from: file.url)
+            let elements: [Timestamped<T>] = try decodeTimestampedStream(from: file.url)
                 .filter { range.contains($0.timestamp) }
                 .suffix(remainingValuesToRead)
                 .reversed()
@@ -340,12 +351,12 @@ final class FileWriter<T> where T: MetricValue {
         return result
     }
 
-    func getFullHistory(maximumValueCount: Int? = nil) throws -> [Timestamped<T>] {
+    func getFullHistory<T>(maximumValueCount: Int? = nil) throws -> [Timestamped<T>] where T: Decodable {
         try getAllLogFiles()
             .map { try decodeTimestampedStream(from: $0) }.joined().map { $0 }
     }
 
-    private func decodeTimestampedStream(from url: URL) throws -> [Timestamped<T>] {
+    private func decodeTimestampedStream<T>(from url: URL) throws -> [Timestamped<T>] where T: Decodable {
         guard exists(url) else {
             throw FileStorageError(.missingFile, url.lastPathComponent)
         }

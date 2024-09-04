@@ -13,8 +13,6 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     
     static let metricListFileName = "metrics.json"
     
-    static let lastValueFileName = "last"
-    
     /// The directory where the log files and other internal data is to be stored.
     public let folder: URL
 
@@ -37,8 +35,8 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
      */
     public var maximumFileSizeInBytes: Int
     
-    private var writers: [MetricId : Any] = [:]
-    
+    private var writers: [MetricId : GenericFileWriter] = [:]
+
     private var metrics: [MetricInfo] = []
     
     /// The cache for the last values
@@ -145,20 +143,20 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
         folder.fileSize
     }
     
-    private func writer<T>(for metric: AsyncMetric<T>) throws -> FileWriter<T> {
+    private func writer<T>(for metric: AsyncMetric<T>) throws -> GenericFileWriter {
         try writer(for: metric.id)
     }
 
-    private func writer<T>(for metric: MetricId, type: T.Type = T.self) throws -> FileWriter<T> {
+    private func writer(for metric: MetricId) throws -> GenericFileWriter {
         guard hasMetric(metric) else {
             throw FileStorageError(.metricId, metric.description)
         }
         if let writer = writers[metric] {
-            return writer as! FileWriter<T>
+            return writer
         }
         let encoder = encoderCreator()
         let decoder = decoderCreator()
-        let writer = FileWriter<T>(
+        let writer = GenericFileWriter(
             id: metric,
             folder: folder,
             encoder: encoder,
@@ -216,7 +214,7 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
     
     public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         var last: Timestamped<T>? = nil
-        let writer = try writer(for: metric, type: T.self)
+        let writer = try writer(for: metric)
         for value in values {
             // Get writer and save value
             try writer.writeOnlyToLog(value)
@@ -231,7 +229,11 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(last) }
     }
-    
+
+    public func timestampOfLastValue(for metric: MetricId) throws -> Date? {
+        return try writer(for: metric).lastValueTimestamp()
+    }
+
     public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
         // Check last value cache
         if let value = lastValues[metric] {
@@ -247,7 +249,7 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
     
     public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
         // Get writer and remove values
-        try writer(for: metric, type: T.self).deleteHistory(from: start, to: end)
+        try writer(for: metric).deleteHistory(from: start, to: end)
         // Clear last value cache
         lastValues[metric] = nil
         // TODO: Update change listeners if current value was deleted?

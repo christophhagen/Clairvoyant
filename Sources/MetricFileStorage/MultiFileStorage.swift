@@ -39,7 +39,7 @@ public final class MultiFileStorage: FileStorageProtocol {
      */
     public var maximumFileSizeInBytes: Int
 
-    private var writers: [MetricId : Any] = [:]
+    private var writers: [MetricId : GenericFileWriter] = [:]
 
     private var knownMetrics: [MetricInfo] = []
 
@@ -151,16 +151,16 @@ public final class MultiFileStorage: FileStorageProtocol {
         folder.fileSize
     }
 
-    private func writer<T>(for metric: MetricId, type: T.Type) throws -> FileWriter<T> {
+    private func writer(for metric: MetricId) throws -> GenericFileWriter {
         guard hasMetric(metric) else {
             throw FileStorageError(.metricId, metric.description)
         }
         if let writer = writers[metric] {
-            return writer as! FileWriter<T>
+            return writer
         }
         let encoder = encoderCreator()
         let decoder = decoderCreator()
-        let writer = FileWriter<T>(
+        let writer = GenericFileWriter(
             id: metric,
             folder: folder,
             encoder: encoder,
@@ -179,8 +179,8 @@ public final class MultiFileStorage: FileStorageProtocol {
 
     // MARK: Statistics
 
-    public func numberOfDataPoints<T>(for metric: Metric<T>) throws -> Int where T: MetricValue {
-        try writer(for: metric.id, type: T.self).numberOfDataPoints()
+    public func numberOfDataPoints(for metric: MetricId) throws -> Int {
+        try writer(for: metric).numberOfDataPoints()
     }
 }
 
@@ -214,7 +214,7 @@ extension MultiFileStorage: MetricStorage {
     public func store<T>(_ value: Timestamped<T>, for metric: MetricId) throws where T: MetricValue {
         try queue.sync {
             // Get writer and save value
-            try writer(for: metric, type: T.self).write(value)
+            try writer(for: metric).write(value)
             // Update last value cache
             lastValues[metric] = value
             // Notify all listeners
@@ -225,7 +225,7 @@ extension MultiFileStorage: MetricStorage {
     public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
         try queue.sync {
             var last: Timestamped<T>? = nil
-            let writer = try writer(for: metric, type: T.self)
+            let writer = try writer(for: metric)
             for value in values {
                 // Get writer and save value
                 try writer.writeOnlyToLog(value)
@@ -242,6 +242,12 @@ extension MultiFileStorage: MetricStorage {
         }
     }
 
+    public func timestampOfLastValue(for metric: MetricId) throws -> Date? {
+        try queue.sync {
+            try writer(for: metric).lastValueTimestamp()
+        }
+    }
+
     public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
         try queue.sync {
             // Check last value cache
@@ -249,20 +255,20 @@ extension MultiFileStorage: MetricStorage {
                 return (value as! Timestamped<T>)
             }
             // Get writer and read value
-            return try writer(for: metric, type: T.self).lastValue()
+            return try writer(for: metric).lastValue()
         }
     }
 
     public func history<T>(for metric: MetricId, from start: Date = .distantPast, to end: Date = .distantFuture, limit: Int? = nil) throws -> [Timestamped<T>] where T : MetricValue {
         try queue.sync {
-            try writer(for: metric, type: T.self).getHistory(from: start, to: end, maximumValueCount: limit)
+            try writer(for: metric).getHistory(from: start, to: end, maximumValueCount: limit)
         }
     }
 
     public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
         try queue.sync {
             // Get writer and remove values
-            let writer = try writer(for: metric, type: T.self)
+            let writer = try writer(for: metric)
             try writer.deleteHistory(from: start, to: end)
             try writer.deleteLastValueFile()
             // Clear last value cache

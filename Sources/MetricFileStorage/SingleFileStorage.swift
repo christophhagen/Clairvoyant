@@ -204,8 +204,13 @@ public actor SingleFileStorage: FileStorageProtocol {
         try unsortedTimestamps(for: metric).sorted()
     }
 
+    @inline(__always)
+    private func lastValueTimestamp(for metric: MetricId) throws -> Date? {
+        try timestamps(for: metric).last
+    }
+
     private func readLastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T: Decodable {
-        guard let date = try timestamps(for: metric).last else {
+        guard let date = try lastValueTimestamp(for: metric) else {
             return nil
         }
         return try value(for: date, of: metric)
@@ -263,7 +268,14 @@ extension SingleFileStorage: AsyncMetricStorage {
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(last) }
     }
-    
+
+    public func timestampOfLastValue(for metric: MetricId) throws -> Date? {
+        if let value = lastValues[metric] {
+            return value
+        }
+        return try lastValueTimestamp(for: metric)
+    }
+
     public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T : MetricValue {
         guard hasMetric(metric) else {
             throw FileStorageError(.metricId, metric.description)
