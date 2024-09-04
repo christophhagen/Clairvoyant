@@ -39,6 +39,10 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.store(values, for: metric)
     }
     
+    public func timestampOfLastValue(for metric: MetricId) throws -> Date? {
+        try storage.timestampOfLastValue(for: metric)
+    }
+
     public func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T: MetricValue {
         try storage.lastValue(for: metric)
     }

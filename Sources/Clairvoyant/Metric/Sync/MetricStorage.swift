@@ -35,6 +35,11 @@ public protocol MetricStorage: AnyObject {
 
     func store<S, T>(_ values: S, for metric: MetricId) throws where S: Sequence, S.Element == Timestamped<T>, T: MetricValue
 
+    /**
+     Return the timestamp of the last value of a metric.
+     */
+    func timestampOfLastValue(for metric: MetricId) throws -> Date?
+
     func lastValue<T>(for metric: MetricId) throws -> Timestamped<T>? where T: MetricValue
 
     func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T: MetricValue

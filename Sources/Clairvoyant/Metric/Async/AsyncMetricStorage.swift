@@ -29,6 +29,8 @@ public protocol AsyncMetricStorage: AnyObject {
 
     func store<S, T>(_ values: S, for metric: MetricId) async throws where S: Sequence, S.Element == Timestamped<T>, T: MetricValue
 
+    func timestampOfLastValue(for metric: MetricId) async throws -> Date?
+    
     func lastValue<T>(for metric: MetricId) async throws -> Timestamped<T>? where T: MetricValue
 
     func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) async throws -> [Timestamped<T>] where T: MetricValue
