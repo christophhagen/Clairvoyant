@@ -403,27 +403,27 @@ final class MultiFileStorageTests: XCTestCase {
 
         try metric.update(1)
         XCTAssertEqual(try metric.currentValue()?.value, 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric.id), 1)
         XCTAssertNil(try metric2.currentValue())
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 0)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 0)
 
         try metric2.update(2)
         XCTAssertEqual(try metric.currentValue()?.value, 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric.id), 1)
         XCTAssertEqual(try metric2.currentValue()?.value, 2)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 1)
 
         try metric.update(3)
         XCTAssertEqual(try metric.currentValue()?.value, 3)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric), 2)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric.id), 2)
         XCTAssertEqual(try metric2.currentValue()?.value, 2)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 1)
 
         try metric2.update(4)
         XCTAssertEqual(try metric.currentValue()?.value, 3)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric), 2)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric.id), 2)
         XCTAssertEqual(try metric2.currentValue()?.value, 4)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 2)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 2)
     }
 
     func testDeleteOneOfMultipleMetrics() throws {
@@ -440,17 +440,17 @@ final class MultiFileStorageTests: XCTestCase {
         XCTAssertEqual(try metric2.currentValue()?.value, 2)
         XCTAssertEqual(try metric3.currentValue()?.value, 3)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3.id), 1)
 
         try storage.delete(metric2)
 
         XCTAssertEqual(try metric1.currentValue()?.value, 1)
         XCTAssertEqual(try metric3.currentValue()?.value, 3)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3.id), 1)
 
         func catchError<T>(_ msg: String, _ block: @autoclosure () throws -> T) {
             do {
@@ -484,9 +484,9 @@ final class MultiFileStorageTests: XCTestCase {
         XCTAssertEqual(try metric2.currentValue()?.value, 2)
         XCTAssertEqual(try metric3.currentValue()?.value, 3)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3.id), 1)
 
         try metric2.deleteHistory()
 
@@ -495,9 +495,9 @@ final class MultiFileStorageTests: XCTestCase {
         XCTAssertEqual(try metric1.currentValue()?.value, 1)
         XCTAssertEqual(try metric3.currentValue()?.value, 3)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 0)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 0)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric3.id), 1)
     }
 
     func testSaveThroughMultipleHandles() throws {
@@ -508,24 +508,24 @@ final class MultiFileStorageTests: XCTestCase {
         XCTAssertNil(try metric1.currentValue())
         XCTAssertNil(try metric2.currentValue())
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 0)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 0)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 0)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 0)
 
         try metric1.update(1)
 
         XCTAssertEqual(try metric1.currentValue()?.value, 1)
         XCTAssertEqual(try metric2.currentValue()?.value, 1)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 1)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 1)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 1)
 
         try metric2.update(2)
 
         XCTAssertEqual(try metric1.currentValue()?.value, 2)
         XCTAssertEqual(try metric2.currentValue()?.value, 2)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 2)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 2)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 2)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 2)
 
         let date = Date.now
         let values = (1...100).map { $0.timestamped(with: date.addingTimeInterval(Double($0))) }
@@ -535,7 +535,7 @@ final class MultiFileStorageTests: XCTestCase {
         XCTAssertEqual(try metric1.currentValue()?.value, values.last!.value)
         XCTAssertEqual(try metric2.currentValue()?.value, values.last!.value)
 
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1), 2 + values.count)
-        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2), 2 + values.count)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric1.id), 2 + values.count)
+        XCTAssertEqual(try storage.numberOfDataPoints(for: metric2.id), 2 + values.count)
     }
 }
