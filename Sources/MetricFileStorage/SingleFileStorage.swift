@@ -315,7 +315,7 @@ extension SingleFileStorage: AsyncMetricStorage {
         }
     }
     
-    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
+    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
         let isReversed = start <= end
         let range = isReversed ? start...end : end...start
         let url = folderUrl(for: metric)

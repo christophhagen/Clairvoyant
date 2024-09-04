@@ -101,7 +101,7 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
      Delete the history in the given interval (including start and end)
      */
     public func deleteHistory(from start: Date = .distantPast, to end: Date = .distantFuture) throws {
-        try storage.deleteHistory(for: id, type: Value.self, from: start, to: end)
+        try storage.deleteHistory(for: id, from: start, to: end)
     }
     
     /**

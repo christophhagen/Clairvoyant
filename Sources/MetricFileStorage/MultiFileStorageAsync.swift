@@ -247,7 +247,7 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         try writer(for: metric).getHistory(from: start, to: end, maximumValueCount: limit)
     }
     
-    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T : MetricValue {
+    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
         // Get writer and remove values
         try writer(for: metric).deleteHistory(from: start, to: end)
         // Clear last value cache

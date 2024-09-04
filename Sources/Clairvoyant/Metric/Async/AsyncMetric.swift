@@ -96,7 +96,7 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
      Delete the history in the given interval (including start and end)
      */
     public func deleteHistory(from start: Date = .distantPast, to end: Date = .distantFuture) async throws {
-        try await storage.deleteHistory(for: id, type: Value.self, from: start, to: end)
+        try await storage.deleteHistory(for: id, from: start, to: end)
     }
     
     /**

@@ -46,8 +46,8 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.history(for: metric, from: start, to: end, limit: limit)
     }
     
-    public func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) async throws where T: MetricValue {
-        try storage.deleteHistory(for: metric, type: type, from: start, to: end)
+    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
+        try storage.deleteHistory(for: metric, from: start, to: end)
     }
     
     public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) async throws where T: MetricValue {

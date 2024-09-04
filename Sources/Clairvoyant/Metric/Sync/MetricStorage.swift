@@ -39,7 +39,7 @@ public protocol MetricStorage: AnyObject {
 
     func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T: MetricValue
 
-    func deleteHistory<T>(for metric: MetricId, type: T.Type, from start: Date, to end: Date) throws where T: MetricValue
+    func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws
 
     func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T: MetricValue
 }
