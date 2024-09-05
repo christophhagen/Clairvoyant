@@ -113,6 +113,16 @@ public struct Metric<Value>: MetricProtocol where Value: MetricValue {
     public func onChange(_ changeCallback: @escaping (_ value: Timestamped<Value>) -> Void) throws {
         try storage.add(changeListener: changeCallback, for: id)
     }
+
+    /**
+     Add a callback to get notified about history deletions of the metric.
+     - Parameter deleteCallback: The closure to call with the deleted range
+     - Parameter range: The deleted value range
+     - Throws: An error by the storage interface if the callback could not be registered
+     */
+    public func onDelete(_ deleteCallback: @escaping (_ range: ClosedRange<Date>) -> Void) throws {
+        try storage.add(deletionListener: deleteCallback, for: id)
+    }
 }
 
 extension Metric: MetricBase {
