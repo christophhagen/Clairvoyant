@@ -46,7 +46,17 @@ public protocol MetricStorage: AnyObject {
 
     func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws
 
+    /**
+     Add a listener to get notified about new values added to a metric.
+     - Note: The listener is only called for the last value when inserting multiple values using ``store(_:for:)``
+     */
     func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T: MetricValue
+
+    /**
+     Add a listener to get notified about history deletion actions.
+     - The callback is called for each invocation of ``deleteHistory(for:from:to:)`` if the metric matches
+     */
+    func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws
 }
 
 extension MetricStorage {

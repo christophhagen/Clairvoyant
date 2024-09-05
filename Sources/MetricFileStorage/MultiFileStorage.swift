@@ -49,6 +49,9 @@ public final class MultiFileStorage: FileStorageProtocol {
     /// The change callbacks for the metrics
     private var changeListeners: [MetricId : [(Any) -> Void]] = [:]
 
+    /// The deletion callbacks for the metrics
+    private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
+
     /**
      Create a new file-based metric storage.
 
@@ -267,12 +270,14 @@ extension MultiFileStorage: MetricStorage {
 
     public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
         try queue.sync {
+            let range = start...end
             // Get writer and remove values
             let writer = try writer(for: metric)
             try writer.deleteHistory(from: start, to: end)
             try writer.deleteLastValueFile()
             // Clear last value cache
             lastValues[metric] = nil
+            deletionListeners[metric]?.forEach { $0(range) }
             // TODO: Update change listeners if current value was deleted?
         }
     }
@@ -284,6 +289,13 @@ extension MultiFileStorage: MetricStorage {
                 changeListener(value as! Timestamped<T>)
             }
             changeListeners[metric] = existingListeners + [newListener]
+        }
+    }
+
+    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+        queue.sync {
+            let existingListeners = deletionListeners[metric] ?? []
+            deletionListeners[metric] = existingListeners + [deletionListener]
         }
     }
 }

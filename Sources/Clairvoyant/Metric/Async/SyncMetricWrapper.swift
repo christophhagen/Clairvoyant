@@ -58,4 +58,8 @@ extension MetricStorageWrapper: AsyncMetricStorage {
     public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T: MetricValue {
         try storage.add(changeListener: changeListener, for:  metric)
     }
+
+    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+        try storage.add(deletionListener: deletionListener, for: metric)
+    }
 }

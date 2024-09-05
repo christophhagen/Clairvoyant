@@ -25,6 +25,9 @@ public actor SingleFileStorage: FileStorageProtocol {
     /// The change callbacks for the metrics
     private var changeListeners: [MetricId : [(Any) -> Void]] = [:]
 
+    /// The deletion callbacks for the metrics
+    private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
+
     /**
      Create a new file-based metric storage.
 
@@ -337,6 +340,7 @@ extension SingleFileStorage: AsyncMetricStorage {
             }
         // Update last value cache
         lastValues[metric] = last
+        deletionListeners[metric]?.forEach { $0(range) }
         // TODO: Update change listeners if current value was deleted?
     }
     
@@ -346,5 +350,10 @@ extension SingleFileStorage: AsyncMetricStorage {
             changeListener(value as! Timestamped<T>)
         }
         changeListeners[metric] = existingListeners + [newListener]
+    }
+
+    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+        let existingListeners = deletionListeners[metric] ?? []
+        deletionListeners[metric] = existingListeners + [deletionListener]
     }
 }
