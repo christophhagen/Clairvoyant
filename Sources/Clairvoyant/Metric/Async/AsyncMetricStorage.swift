@@ -44,10 +44,25 @@ public protocol AsyncMetricStorage: AnyObject {
     func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) async throws where T: MetricValue
 
     /**
+     Set the global listener for change actions.
+
+     Only a single global listener must be stored.
+     */
+    func setGlobalChangeListener(_ listener: @escaping (_ id: MetricId, _ newValueDate: Date) -> Void) async throws
+
+    /**
      Add a listener to get notified about history deletion actions.
      - The callback is called for each invocation of ``deleteHistory(for:from:to:)`` if the metric matches
      */
     func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) async throws
+
+    /**
+     Set the global listener for deletion actions.
+
+     Only a single global listener must be stored.
+     */
+    func setGlobalDeletionListener(_ listener: @escaping (_ id: MetricId, _ range: ClosedRange<Date>) -> Void) async throws
+
 }
 
 extension AsyncMetricStorage {

@@ -23,11 +23,15 @@ public actor SingleFileStorage: FileStorageProtocol {
     private var lastValues: [MetricId : Date] = [:]
 
     /// The change callbacks for the metrics
-    private var changeListeners: [MetricId : [(Any) -> Void]] = [:]
+    private var changeListeners: [MetricId : [(AnyTimestamped) -> Void]] = [:]
 
+    private var globalChangeListener: ((MetricId, Date) -> Void)?
+    
     /// The deletion callbacks for the metrics
     private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
 
+    private var globalDeletionListener: ((MetricId, ClosedRange<Date>) -> Void)?
+    
     /**
      Create a new file-based metric storage.
 
@@ -255,21 +259,23 @@ extension SingleFileStorage: AsyncMetricStorage {
         lastValues[metric] = value.timestamp
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(value) }
+        globalChangeListener?(metric, value.timestamp)
     }
     
     public func store<S, T>(_ values: S, for metric: MetricId) throws where S : Sequence, T : MetricValue, S.Element == Timestamped<T> {
-        var last: Date? = nil
+        var last: Timestamped<T>? = nil
         for value in values {
             try store(file: value, for: metric)
-            last = value.timestamp
+            last = value
         }
         guard let last else {
             return
         }
         // Update last value cache
-        lastValues[metric] = last
+        lastValues[metric] = last.timestamp
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(last) }
+        globalChangeListener?(metric, last.timestamp)
     }
 
     public func timestampOfLastValue(for metric: MetricId) throws -> Date? {

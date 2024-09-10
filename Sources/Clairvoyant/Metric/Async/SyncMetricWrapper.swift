@@ -59,7 +59,15 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.add(changeListener: changeListener, for:  metric)
     }
 
+    public func setGlobalChangeListener(_ listener: @escaping (MetricId, Date) -> Void) async throws {
+        try storage.setGlobalChangeListener(listener)
+    }
+
     public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
         try storage.add(deletionListener: deletionListener, for: metric)
+    }
+
+    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, ClosedRange<Date>) -> Void) throws {
+        try storage.setGlobalDeletionListener(listener)
     }
 }

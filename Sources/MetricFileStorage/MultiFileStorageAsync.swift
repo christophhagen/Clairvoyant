@@ -43,11 +43,15 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     private var lastValues: [MetricId : AnyTimestamped] = [:]
     
     /// The change callbacks for the metrics
-    private var changeListeners: [MetricId : [(Any) -> Void]] = [:]
+    private var changeListeners: [MetricId : [(AnyTimestamped) -> Void]] = [:]
+    
+    private var globalChangeListener: ((MetricId, Date) -> Void)?
     
     /// The deletion callbacks for the metrics
     private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
 
+    private var globalDeletionListener: ((MetricId, ClosedRange<Date>) -> Void)?
+    
     /**
      Create a new file-based metric storage.
 
@@ -185,6 +189,7 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
         lastValues[metric] = value
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(value) }
+        globalChangeListener?(metric, value.timestamp)
     }
 }
 
@@ -231,6 +236,7 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         lastValues[metric] = last
         // Notify all listeners
         changeListeners[metric]?.forEach { $0(last) }
+        globalChangeListener?(metric, last.timestamp)
     }
 
     public func timestampOfLastValue(for metric: MetricId) throws -> Date? {
