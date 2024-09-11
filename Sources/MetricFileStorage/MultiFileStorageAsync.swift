@@ -277,8 +277,16 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         changeListeners[metric] = existingListeners + [newListener]
     }
 
+    public func setGlobalChangeListener(_ listener: @escaping (Clairvoyant.MetricId, Date) -> Void) async throws {
+        self.globalChangeListener = listener
+    }
+
     public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
         let existingListeners = deletionListeners[metric] ?? []
         deletionListeners[metric] = existingListeners + [deletionListener]
+    }
+
+    public func setGlobalDeletionListener(_ listener: @escaping (Clairvoyant.MetricId, ClosedRange<Date>) -> Void) async throws {
+        self.globalDeletionListener = listener
     }
 }
