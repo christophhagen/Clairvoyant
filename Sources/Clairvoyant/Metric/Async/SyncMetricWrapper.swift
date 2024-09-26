@@ -51,8 +51,8 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.history(for: metric, from: start, to: end, limit: limit)
     }
     
-    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
-        try storage.deleteHistory(for: metric, from: start, to: end)
+    public func deleteHistory(for metric: MetricId, before date: Date) throws {
+        try storage.deleteHistory(for: metric, before: date)
     }
     
     public func add<T>(changeListener: @escaping (Timestamped<T>) -> Void, for metric: MetricId) throws where T: MetricValue {
@@ -63,11 +63,11 @@ extension MetricStorageWrapper: AsyncMetricStorage {
         try storage.setGlobalChangeListener(listener)
     }
 
-    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+    public func add(deletionListener: @escaping (Date) -> Void, for metric: MetricId) throws {
         try storage.add(deletionListener: deletionListener, for: metric)
     }
 
-    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, ClosedRange<Date>) -> Void) throws {
+    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, Date) -> Void) throws {
         try storage.setGlobalDeletionListener(listener)
     }
 }

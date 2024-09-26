@@ -52,9 +52,9 @@ public final class MultiFileStorage: FileStorageProtocol {
     private var globalChangeListener: ((MetricId, Date) -> Void)?
 
     /// The deletion callbacks for the metrics
-    private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
+    private var deletionListeners: [MetricId : [(Date) -> Void]] = [:]
 
-    private var globalDeletionListener: ((MetricId, ClosedRange<Date>) -> Void)?
+    private var globalDeletionListener: ((MetricId, Date) -> Void)?
 
     /**
      Create a new file-based metric storage.
@@ -274,17 +274,20 @@ extension MultiFileStorage: MetricStorage {
         }
     }
 
-    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
+    public func deleteHistory(for metric: MetricId, before date: Date) throws {
         try queue.sync {
-            let range = start...end
             // Get writer and remove values
             let writer = try writer(for: metric)
-            try writer.deleteHistory(from: start, to: end)
-            try writer.deleteLastValueFile()
-            // Clear last value cache
-            lastValues[metric] = nil
-            deletionListeners[metric]?.forEach { $0(range) }
-            globalDeletionListener?(metric, range)
+            try writer.deleteHistory(before: date)
+
+            // Clear last value cache if last value was deleted
+            if let lastTimestamp = try lastValues[metric]?.timestamp ?? writer.lastValueTimestamp(),
+                lastTimestamp < date {
+                try writer.deleteLastValueFile()
+                lastValues[metric] = nil
+            }
+            deletionListeners[metric]?.forEach { $0(date) }
+            globalDeletionListener?(metric, date)
             // TODO: Update change listeners if current value was deleted?
         }
     }
@@ -305,14 +308,14 @@ extension MultiFileStorage: MetricStorage {
         }
     }
 
-    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+    public func add(deletionListener: @escaping (Date) -> Void, for metric: MetricId) throws {
         queue.sync {
             let existingListeners = deletionListeners[metric] ?? []
             deletionListeners[metric] = existingListeners + [deletionListener]
         }
     }
 
-    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, ClosedRange<Date>) -> Void) throws {
+    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, Date) -> Void) throws {
         queue.sync {
             globalDeletionListener = listener
         }

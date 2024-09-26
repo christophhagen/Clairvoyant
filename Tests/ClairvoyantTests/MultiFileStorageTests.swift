@@ -312,17 +312,16 @@ final class MultiFileStorageTests: XCTestCase {
         let date = Date.now
         let values = (1...100).map { $0.timestamped(with: date.addingTimeInterval(Double($0))) }
 
-        let start = date.addingTimeInterval(15.5)
         let end = date.addingTimeInterval(35.5)
         try metric.update(values)
 
-        try metric.deleteHistory(from: start, to: end)
+        try metric.deleteHistory(before: end)
 
-        let deleted = try metric.history(from: start, to: end)
+        let deleted = try metric.history(to: end)
         XCTAssertEqual(deleted.count, 0)
 
         let remaining = try metric.history()
-        XCTAssertEqual(remaining, Array(values[...14] + values[35...]))
+        XCTAssertEqual(remaining, Array(values[35...]))
     }
 
     func testDeletesMetricDataAfterMetricDeletion() throws {

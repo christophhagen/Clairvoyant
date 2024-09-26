@@ -44,7 +44,12 @@ public protocol MetricStorage: AnyObject {
 
     func history<T>(for metric: MetricId, from start: Date, to end: Date, limit: Int?) throws -> [Timestamped<T>] where T: MetricValue
 
-    func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws
+    /**
+     Delete historic data before a given date
+     - Parameter metric: The id of the metric for which to delete history data
+     - Parameter date: The point in time up to which values should be deleted
+     */
+    func deleteHistory(for metric: MetricId, before date: Date) throws
 
     /**
      Add a listener to get notified about new values added to a metric.
@@ -61,16 +66,17 @@ public protocol MetricStorage: AnyObject {
 
     /**
      Add a listener to get notified about history deletion actions.
-     - The callback is called for each invocation of ``deleteHistory(for:from:to:)`` if the metric matches
+     - The callback is called for each invocation of ``deleteHistory(for:before:)`` if the metric matches
      */
-    func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws
+    func add(deletionListener: @escaping (Date) -> Void, for metric: MetricId) throws
 
     /**
      Set the global listener for deletion actions.
 
      Only a single global listener must be stored.
+     - The callback is called for each invocation of ``deleteHistory(for:before:)``
      */
-    func setGlobalDeletionListener(_ listener: @escaping (_ id: MetricId, _ range: ClosedRange<Date>) -> Void) throws
+    func setGlobalDeletionListener(_ listener: @escaping (_ id: MetricId, _ range: Date) -> Void) throws
 }
 
 extension MetricStorage {

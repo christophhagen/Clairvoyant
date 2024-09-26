@@ -48,9 +48,9 @@ public actor MultiFileStorageAsync: FileStorageProtocol {
     private var globalChangeListener: ((MetricId, Date) -> Void)?
     
     /// The deletion callbacks for the metrics
-    private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
+    private var deletionListeners: [MetricId : [(Date) -> Void]] = [:]
 
-    private var globalDeletionListener: ((MetricId, ClosedRange<Date>) -> Void)?
+    private var globalDeletionListener: ((MetricId, Date) -> Void)?
     
     /**
      Create a new file-based metric storage.
@@ -256,13 +256,12 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         try writer(for: metric).getHistory(from: start, to: end, maximumValueCount: limit)
     }
     
-    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
-        let range = start...end
+    public func deleteHistory(for metric: MetricId, before date: Date) throws {
         // Get writer and remove values
-        try writer(for: metric).deleteHistory(from: start, to: end)
+        try writer(for: metric).deleteHistory(before: date)
         // Clear last value cache
         lastValues[metric] = nil
-        deletionListeners[metric]?.forEach { $0(range) }
+        deletionListeners[metric]?.forEach { $0(date) }
         // TODO: Update change listeners if current value was deleted?
     }
     
@@ -281,12 +280,12 @@ extension MultiFileStorageAsync: AsyncMetricStorage {
         self.globalChangeListener = listener
     }
 
-    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+    public func add(deletionListener: @escaping (Date) -> Void, for metric: MetricId) throws {
         let existingListeners = deletionListeners[metric] ?? []
         deletionListeners[metric] = existingListeners + [deletionListener]
     }
 
-    public func setGlobalDeletionListener(_ listener: @escaping (Clairvoyant.MetricId, ClosedRange<Date>) -> Void) async throws {
+    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, Date) -> Void) async throws {
         self.globalDeletionListener = listener
     }
 }

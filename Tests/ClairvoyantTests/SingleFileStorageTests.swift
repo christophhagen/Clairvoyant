@@ -330,17 +330,16 @@ final class SingleFileStorageTests: XCTestCase {
         let date = Date.now
         let values = (1...100).map { $0.timestamped(with: date.addingTimeInterval(Double($0))) }
 
-        let start = date.addingTimeInterval(15.5)
         let end = date.addingTimeInterval(35.5)
         try await metric.update(values)
 
-        try await metric.deleteHistory(from: start, to: end)
+        try await metric.deleteHistory(before: end)
 
-        let deleted = try await metric.history(from: start, to: end)
+        let deleted = try await metric.history(to: end)
         XCTAssertEqual(deleted.count, 0)
 
         let remaining = try await metric.history()
-        XCTAssertEqual(remaining, Array(values[...14] + values[35...]))
+        XCTAssertEqual(remaining, Array(values[35...]))
     }
 
     func testDeletesMetricDataAfterMetricDeletion() async throws {

@@ -93,10 +93,11 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
     }
     
     /**
-     Delete the history in the given interval (including start and end)
+     Delete the historic values before a given date.
+     - Parameter date: The point in time before which all values will be deleted.
      */
-    public func deleteHistory(from start: Date = .distantPast, to end: Date = .distantFuture) async throws {
-        try await storage.deleteHistory(for: id, from: start, to: end)
+    public func deleteHistory(before date: Date = .distantFuture) async throws {
+        try await storage.deleteHistory(for: id, before: date)
     }
     
     /**
@@ -111,11 +112,11 @@ public struct AsyncMetric<Value>: MetricProtocol where Value: MetricValue {
 
     /**
      Add a callback to get notified about history deletions of the metric.
-     - Parameter deleteCallback: The closure to call with the deleted range
-     - Parameter range: The deleted value range
+     - Parameter deleteCallback: The closure to call with the cutoff date
+     - Parameter date: The date up to which the historic values have been deleted
      - Throws: An error by the storage interface if the callback could not be registered
      */
-    public func onDelete(_ deleteCallback: @escaping (_ range: ClosedRange<Date>) -> Void) async throws {
+    public func onDelete(_ deleteCallback: @escaping (_ date: Date) -> Void) async throws {
         try await storage.add(deletionListener: deleteCallback, for: id)
     }
 }

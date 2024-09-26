@@ -184,7 +184,7 @@ final class ClairvoyantTests: XCTestCase {
         let history1 = try await metric.history()
         XCTAssertEqual(history1.count, 2)
 
-        try await metric.deleteHistory(to: deleteDate)
+        try await metric.deleteHistory(before: deleteDate)
         let history2 = try await metric.history()
         XCTAssertEqual(history2.count, 1)
         XCTAssertEqual(history2.first?.value, 2)

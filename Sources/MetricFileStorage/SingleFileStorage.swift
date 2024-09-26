@@ -28,10 +28,10 @@ public actor SingleFileStorage: FileStorageProtocol {
     private var globalChangeListener: ((MetricId, Date) -> Void)?
     
     /// The deletion callbacks for the metrics
-    private var deletionListeners: [MetricId : [(ClosedRange<Date>) -> Void]] = [:]
+    private var deletionListeners: [MetricId : [(Date) -> Void]] = [:]
 
-    private var globalDeletionListener: ((MetricId, ClosedRange<Date>) -> Void)?
-    
+    private var globalDeletionListener: ((MetricId, Date) -> Void)?
+
     /**
      Create a new file-based metric storage.
 
@@ -324,29 +324,31 @@ extension SingleFileStorage: AsyncMetricStorage {
         }
     }
     
-    public func deleteHistory(for metric: MetricId, from start: Date, to end: Date) throws {
-        let isReversed = start <= end
-        let range = isReversed ? start...end : end...start
+    public func deleteHistory(for metric: MetricId, before date: Date) throws {
         let url = folderUrl(for: metric)
         var last: Date? = nil
         try FileManager.default
             .contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
             .forEach { fileUrl in
-                guard let timestamp = date(from: fileUrl.lastPathComponent) else {
+                guard let timestamp = self.date(from: fileUrl.lastPathComponent) else {
                     return
                 }
-                guard range.contains(timestamp) else {
-                    // Update last value timestamp from remaining samples
-                    if last == nil || timestamp > last! {
-                        last = timestamp
-                    }
+                if timestamp <= date {
+                    try fileUrl.remove()
                     return
                 }
-                try fileUrl.remove()
+                // Update last value timestamp from remaining samples
+                guard let lastTimestamp = last else {
+                    last = timestamp
+                    return
+                }
+                if timestamp > lastTimestamp {
+                    last = timestamp
+                }
             }
         // Update last value cache
         lastValues[metric] = last
-        deletionListeners[metric]?.forEach { $0(range) }
+        deletionListeners[metric]?.forEach { $0(date) }
         // TODO: Update change listeners if current value was deleted?
     }
     
@@ -358,16 +360,16 @@ extension SingleFileStorage: AsyncMetricStorage {
         changeListeners[metric] = existingListeners + [newListener]
     }
 
-    public func setGlobalChangeListener(_ listener: @escaping (Clairvoyant.MetricId, Date) -> Void) async throws {
+    public func setGlobalChangeListener(_ listener: @escaping (MetricId, Date) -> Void) async throws {
         self.globalChangeListener = listener
     }
 
-    public func add(deletionListener: @escaping (ClosedRange<Date>) -> Void, for metric: MetricId) throws {
+    public func add(deletionListener: @escaping (Date) -> Void, for metric: MetricId) throws {
         let existingListeners = deletionListeners[metric] ?? []
         deletionListeners[metric] = existingListeners + [deletionListener]
     }
 
-    public func setGlobalDeletionListener(_ listener: @escaping (Clairvoyant.MetricId, ClosedRange<Date>) -> Void) async throws {
+    public func setGlobalDeletionListener(_ listener: @escaping (MetricId, Date) -> Void) async throws {
         self.globalDeletionListener = listener
     }
 }

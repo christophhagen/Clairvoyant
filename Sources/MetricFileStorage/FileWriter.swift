@@ -424,7 +424,7 @@ final class GenericFileWriter {
         }
     }
 
-    func deleteHistory(from start: Date, to end: Date) throws {
+    func deleteHistory(before date: Date) throws {
         // Prevent messing with open file
         closeFile()
 
@@ -432,24 +432,25 @@ final class GenericFileWriter {
         let files = try getAllLogFilesWithIntervals()
 
         for (url, range) in files {
-            guard range.lowerBound <= end && range.upperBound >= start else {
+            if range.lowerBound > date {
+                // File is completely after the date
                 continue
             }
-            if range.lowerBound >= start && range.upperBound <= end {
+            if range.upperBound <= date {
                 // File completely contained in interval to delete
                 try deleteFile(at: url)
                 // If an error is thrown here, then only the oldest history will be deleted,
                 // so at least no inconsistency
             } else {
                 // Delete some entries within file
-                try deleteElementsInFile(at: url, from: start, to: end)
+                try deleteElementsInFile(at: url, before: date)
             }
         }
     }
 
-    private func deleteElementsInFile(at url: URL, from start: Date, to end: Date) throws {
+    private func deleteElementsInFile(at url: URL, before date: Date) throws {
         let remainingElements = try getElements(from: url)
-            .filter { $0.date < start || $0.date > end }
+            .filter { $0.date > date }
         guard let start = remainingElements.first?.date else {
             // No elements to keep, delete old file
             print("Nothing to keep")
