@@ -1,7 +1,5 @@
 import Foundation
 
-typealias TimestampedValueData = Data
-
 public struct Timestamped<Value> {
 
     public let timestamp: Date
@@ -15,6 +13,11 @@ public struct Timestamped<Value> {
 }
 
 extension Timestamped: TimestampedProtocol {
+    
+}
+
+
+extension Timestamped: AnyTimestamped {
     
 }
 
@@ -47,18 +50,5 @@ extension Timestamped: CustomStringConvertible where Value: CustomStringConverti
     
     public var description: String {
         "[\(timestamp)] \(value.description)"
-    }
-}
-
-/**
- A struct to partially decode abstract timestamped values, when the contained value is unknown.
- */
-public struct UnknownTimestamped: Decodable {
-
-    public let timestamp: Date
-
-    public init(from decoder: Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        self.timestamp = try container.decode(Date.self)
     }
 }

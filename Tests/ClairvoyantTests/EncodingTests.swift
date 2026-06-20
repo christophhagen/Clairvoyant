@@ -1,5 +1,6 @@
 import XCTest
 @testable import Clairvoyant
+@testable import MetricFileStorage
 
 final class EncodingTests: XCTestCase {
 
